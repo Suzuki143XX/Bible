@@ -1,0 +1,55 @@
+============================================
+UPLOAD TO GITHUB - DRAG & DROP
+============================================
+
+FOLDER LOCATION:
+C:\Users\gmelc\.local\bin\Bible-AI-Ready
+
+STEP 1: CREATE REPO
+1. Go to https://github.com/new
+2. Repository name: bible-ai
+3. UNCHECK "Add a README file"
+4. Click "Create repository"
+
+STEP 2: SELECT FILES
+1. Open this folder: C:\Users\gmelc\.local\bin\Bible-AI-Ready
+2. Press Ctrl+A (selects all 8 items)
+3. Drag to GitHub upload area
+
+STEP 3: COMMIT
+1. Wait for upload
+2. Click "Commit changes"
+
+DONE! Your files are now on GitHub.
+
+============================================
+WHAT'S INCLUDED (8 items at root level):
+============================================
+
+6 FILES:
+- app.py
+- admin.py
+- requirements.txt
+- render.yaml
+- .gitignore
+- README.md
+
+2 FOLDERS:
+- templates/ (9 HTML files inside)
+- static/ (1 file inside)
+
+============================================
+NEXT: DEPLOY TO RENDER.COM
+============================================
+
+1. Go to https://dashboard.render.com/
+2. Click "New" → "Web Service"
+3. Connect your GitHub repo
+4. Settings:
+   - Runtime: Python 3
+   - Build Command: pip install -r requirements.txt
+   - Start Command: gunicorn app:app
+5. Add environment variables (see DEPLOY.md)
+6. Click "Create Web Service"
+
+============================================
