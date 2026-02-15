@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #0f0f1e;
+            color: #fff;
+            min-height: 100vh;
+        }
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 250px;
+            height: 100vh;
+            background: rgba(255,255,255,0.03);
+            border-right: 1px solid rgba(255,255,255,0.1);
+            padding: 20px;
+        }
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 30px;
+        }
+        .nav-item {
+            padding: 12px 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-bottom: 5px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .nav-item:hover, .nav-item.active {
+            background: rgba(102,126,234,0.2);
+        }
+        .main-content {
+            margin-left: 250px;
+            padding: 30px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .role-badge {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .role-owner { background: #ffd700; color: #000; }
+        .role-co_owner { background: #ff6b6b; color: #fff; }
+        .role-mod { background: #4ecdc4; color: #000; }
+        .role-host { background: #95e1d3; color: #000; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 20px;
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .panel {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        th { color: #888; font-weight: 500; }
+        .user-badge {
+            padding: 3px 10px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+        .badge-user { background: #333; }
+        .badge-host { background: #95e1d3; color: #000; }
+        .badge-mod { background: #4ecdc4; color: #000; }
+        .badge-co_owner { background: #ff6b6b; color: #fff; }
+        .badge-owner { background: #ffd700; color: #000; }
+        .btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            margin-right: 5px;
+        }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-danger { background: #ff6b6b; color: white; }
+        .btn-success { background: #4ecdc4; color: #000; }
+        .logout-btn {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: #fff;
+            padding: 8px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .hidden { display: none !important; }
+        .search-box {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 10px 15px;
+            border-radius: 8px;
+            color: #fff;
+            width: 250px;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="logo">⚡ Admin Panel</div>
+        <div class="nav-item active" onclick="showSection('dashboard')">
+            <span>📊</span> Dashboard
+        </div>
+        <div class="nav-item" onclick="showSection('users')">
+            <span>👥</span> Users
+        </div>
+        <div class="nav-item" onclick="showSection('bans')">
+            <span>🚫</span> Bans
+        </div>
+        <div class="nav-item" onclick="showSection('audit')">
+            <span>📋</span> Audit Logs
+        </div>
+        <div class="nav-item owner-only" onclick="showSection('settings')">
+            <span>⚙️</span> Settings
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="header">
+            <h1 id="pageTitle">Dashboard</h1>
+            <div style="display:flex;align-items:center;gap:15px;">
+                <span id="roleBadge" class="role-badge">Loading...</span>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <!-- Dashboard Section -->
+        <div id="dashboard-section">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div style="color:#888;font-size:0.9rem;">Total Users</div>
+                    <div class="stat-value" id="statUsers">-</div>
+                </div>
+                <div class="stat-card">
+                    <div style="color:#888;font-size:0.9rem;">Active Bans</div>
+                    <div class="stat-value" id="statBans">-</div>
+                </div>
+                <div class="stat-card">
+                    <div style="color:#888;font-size:0.9rem;">Verse Views</div>
+                    <div class="stat-value" id="statViews">-</div>
+                </div>
+                <div class="stat-card">
+                    <div style="color:#888;font-size:0.9rem;">Your Role</div>
+                    <div class="stat-value" style="font-size:1.2rem;text-transform:uppercase;" id="statRole">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Users Section -->
+        <div id="users-section" class="hidden">
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>User Management</h3>
+                    <input type="text" class="search-box" placeholder="Search users..." onkeyup="searchUsers(this.value)">
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Bans Section -->
+        <div id="bans-section" class="hidden">
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>Banned Users</h3>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Reason</th>
+                            <th>Banned By</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bansTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Audit Section -->
+        <div id="audit-section" class="hidden">
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>Audit Logs</h3>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Admin</th>
+                            <th>Action</th>
+                            <th>Details</th>
+                            <th>IP</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Settings Section -->
+        <div id="settings-section" class="hidden">
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>Admin Settings</h3>
+                </div>
+                <p style="color:#888;margin-bottom:20px;">Only owners can change settings.</p>
+                <div id="settingsContent">
+                    <!-- Settings loaded dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentRole = null;
+        let currentLevel = 0;
+        let allUsers = [];
+
+        // Load initial data
+        async function init() {
+            await loadStats();
+            await loadUsers();
+            await loadAuditLogs();
+        }
+
+        async function loadStats() {
+            try {
+                const res = await fetch('/admin/api/stats');
+                const data = await res.json();
+                document.getElementById('statUsers').textContent = data.users;
+                document.getElementById('statBans').textContent = data.bans;
+                document.getElementById('statViews').textContent = data.views;
+                document.getElementById('statRole').textContent = data.role;
+                
+                currentRole = data.role;
+                currentLevel = data.level;
+                
+                const badge = document.getElementById('roleBadge');
+                badge.textContent = data.role;
+                badge.className = 'role-badge role-' + data.role;
+                
+                // Hide owner-only items for non-owners
+                if (data.role !== 'owner') {
+                    document.querySelectorAll('.owner-only').forEach(el => el.classList.add('hidden'));
+                }
+            } catch (err) {
+                console.error('Failed to load stats:', err);
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                const res = await fetch('/admin/api/users');
+                allUsers = await res.json();
+                renderUsers(allUsers);
+            } catch (err) {
+                console.error('Failed to load users:', err);
+            }
+        }
+
+        function renderUsers(users) {
+            const tbody = document.getElementById('usersTable');
+            tbody.innerHTML = users.map(u => `
+                <tr>
+                    <td>${u.name}</td>
+                    <td>${u.email}</td>
+                    <td><span class="user-badge badge-${u.role}">${u.role}</span></td>
+                    <td>${u.is_banned ? '🚫 Banned' : '✅ Active'}</td>
+                    <td>
+                        <button class="btn btn-primary" onclick="changeRole(${u.id}, '${u.role}')">Change Role</button>
+                        ${u.is_banned 
+                            ? `<button class="btn btn-success" onclick="unbanUser(${u.id})">Unban</button>`
+                            : `<button class="btn btn-danger" onclick="banUser(${u.id})">Ban</button>`
+                        }
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function searchUsers(query) {
+            const filtered = allUsers.filter(u => 
+                u.name.toLowerCase().includes(query.toLowerCase()) ||
+                u.email.toLowerCase().includes(query.toLowerCase())
+            );
+            renderUsers(filtered);
+        }
+
+        async function loadAuditLogs() {
+            try {
+                const res = await fetch('/admin/api/audit-logs');
+                const logs = await res.json();
+                document.getElementById('auditTable').innerHTML = logs.map(l => `
+                    <tr>
+                        <td>${new Date(l.timestamp).toLocaleString()}</td>
+                        <td>${l.admin_id}</td>
+                        <td>${l.action}</td>
+                        <td>${l.details || '-'}</td>
+                        <td>${l.ip_address || '-'}</td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error('Failed to load audit logs:', err);
+            }
+        }
+
+        async function banUser(userId) {
+            const reason = prompt('Ban reason:');
+            if (!reason) return;
+            
+            try {
+                await fetch(`/admin/api/users/${userId}/ban`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ banned: true, reason })
+                });
+                loadUsers();
+                loadStats();
+            } catch (err) {
+                alert('Failed to ban user');
+            }
+        }
+
+        async function unbanUser(userId) {
+            try {
+                await fetch(`/admin/api/users/${userId}/ban`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ banned: false })
+                });
+                loadUsers();
+                loadStats();
+            } catch (err) {
+                alert('Failed to unban user');
+            }
+        }
+
+        async function changeRole(userId, currentRole) {
+            const roles = ['user', 'host', 'mod', 'co_owner', 'owner'];
+            const newRole = prompt(`Change role to: ${roles.join(', ')}`, currentRole);
+            if (!newRole || newRole === currentRole) return;
+            
+            try {
+                const res = await fetch(`/admin/api/users/${userId}/role`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ role: newRole })
+                });
+                if (res.ok) {
+                    loadUsers();
+                } else {
+                    const err = await res.json();
+                    alert(err.error || 'Failed to change role');
+                }
+            } catch (err) {
+                alert('Failed to change role');
+            }
+        }
+
+        function showSection(section) {
+            // Update nav
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            event.target.closest('.nav-item').classList.add('active');
+            
+            // Hide all sections
+            document.querySelectorAll('[id$="-section"]').forEach(el => el.classList.add('hidden'));
+            
+            // Show selected
+            document.getElementById(section + '-section').classList.remove('hidden');
+            
+            // Update title
+            const titles = {
+                dashboard: 'Dashboard',
+                users: 'User Management',
+                bans: 'Banned Users',
+                audit: 'Audit Logs',
+                settings: 'Settings'
+            };
+            document.getElementById('pageTitle').textContent = titles[section];
+        }
+
+        async function logout() {
+            await fetch('/admin/logout', { method: 'POST' });
+            window.location.href = '/admin/login';
+        }
+
+        // Initialize
+        init();
+    </script>
+</body>
+</html>
