@@ -1,0 +1,183 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+{% block header_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Stats Grid -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon blue">👥</div>
+        <div class="stat-value" id="statTotalUsers">{{ stats.total_users or 0 }}</div>
+        <div class="stat-label">Total Users</div>
+        <div class="stat-change positive">
+            <span>↑</span>
+            <span>{{ stats.new_users_week or 0 }} this week</span>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon purple">👑</div>
+        <div class="stat-value" id="statAdminUsers">{{ stats.admin_users or 0 }}</div>
+        <div class="stat-label">Administrators</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon red">🚫</div>
+        <div class="stat-value" id="statBannedUsers">{{ stats.banned_users or 0 }}</div>
+        <div class="stat-label">Banned Users</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon green">📖</div>
+        <div class="stat-value" id="statTotalVerses">{{ stats.total_verses or 0 }}</div>
+        <div class="stat-label">Total Verses</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon orange">❤️</div>
+        <div class="stat-value" id="statTotalLikes">{{ stats.total_likes or 0 }}</div>
+        <div class="stat-label">Total Likes</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon blue">💬</div>
+        <div class="stat-value" id="statTotalComments">{{ stats.total_comments or 0 }}</div>
+        <div class="stat-label">Comments</div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">Quick Actions</div>
+    </div>
+    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+        <a href="/admin/users" class="btn btn-primary">
+            <span>👥</span>
+            Manage Users
+        </a>
+        <a href="/admin/audits" class="btn btn-secondary">
+            <span>📋</span>
+            View Audit Logs
+        </a>
+        <button class="btn btn-secondary" onclick="refreshStats()">
+            <span>🔄</span>
+            Refresh Stats
+        </button>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">Recent Admin Activity</div>
+        <a href="/admin/audits" class="btn btn-sm btn-secondary">View All</a>
+    </div>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Admin</th>
+                    <th>Action</th>
+                    <th>Target</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+            <tbody id="activityTableBody">
+                {% if recent_activity %}
+                    {% for activity in recent_activity %}
+                    <tr>
+                        <td>{{ activity.admin_name }}</td>
+                        <td>
+                            <span class="badge {% if activity.action == 'user_banned' %}badge-danger{% elif activity.action == 'user_updated' %}badge-warning{% else %}badge-primary{% endif %}">
+                                {{ activity.action }}
+                            </span>
+                        </td>
+                        <td>{{ activity.target_name or '-' }}</td>
+                        <td>{{ activity.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="4" class="empty-state">
+                            <div class="empty-state-icon">📋</div>
+                            <div class="empty-state-title">No activity yet</div>
+                            <div style="color: var(--text-tertiary);">Admin actions will appear here</div>
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- System Status -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">System Status</div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 12px; height: 12px; background: var(--success); border-radius: 50%; animation: pulse 2s infinite;"></div>
+            <div>
+                <div style="font-weight: 600;">Generator</div>
+                <div style="font-size: 13px; color: var(--text-tertiary);">Running</div>
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 12px; height: 12px; background: var(--success); border-radius: 50%; animation: pulse 2s infinite;"></div>
+            <div>
+                <div style="font-weight: 600;">Database</div>
+                <div style="font-size: 13px; color: var(--text-tertiary);">Connected</div>
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 12px; height: 12px; background: var(--success); border-radius: 50%; animation: pulse 2s infinite;"></div>
+            <div>
+                <div style="font-weight: 600;">Authentication</div>
+                <div style="font-size: 13px; color: var(--text-tertiary);">Active</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Refresh stats from API
+    async function refreshStats() {
+        try {
+            const response = await fetch('/admin/api/stats');
+            const data = await response.json();
+            
+            if (data.error) {
+                showToast('Error refreshing stats: ' + data.error, 'error');
+                return;
+            }
+            
+            // Update stats
+            document.getElementById('statTotalUsers').textContent = data.total_users || 0;
+            document.getElementById('statAdminUsers').textContent = data.admin_users || 0;
+            document.getElementById('statBannedUsers').textContent = data.banned_users || 0;
+            document.getElementById('statTotalVerses').textContent = data.total_verses || 0;
+            document.getElementById('statTotalLikes').textContent = data.total_likes || 0;
+            document.getElementById('statTotalComments').textContent = data.total_comments || 0;
+            
+            showToast('Stats refreshed successfully');
+        } catch (e) {
+            showToast('Error refreshing stats', 'error');
+        }
+    }
+
+    // Auto refresh stats every 30 seconds
+    setInterval(refreshStats, 30000);
+</script>
+{% endblock %}

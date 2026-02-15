@@ -1,0 +1,178 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Settings{% endblock %}
+{% block header_title %}System Settings{% endblock %}
+
+{% block content %}
+<!-- System Configuration -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">System Configuration</div>
+    </div>
+    
+    <div style="display: grid; gap: 24px;">
+        <div class="form-group">
+            <label class="form-label">Verse Refresh Interval</label>
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <select class="form-select" id="verseInterval" style="width: 200px;">
+                    <option value="30">30 seconds</option>
+                    <option value="60">1 minute</option>
+                    <option value="120">2 minutes</option>
+                    <option value="300">5 minutes</option>
+                    <option value="600">10 minutes</option>
+                </select>
+                <button class="btn btn-primary" onclick="saveInterval()">Save</button>
+            </div>
+            <div style="font-size: 13px; color: var(--text-tertiary); margin-top: 8px;">
+                How often the system fetches new verses from the API.
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Admin Access -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">Admin Access</div>
+    </div>
+    
+    <div style="display: grid; gap: 24px;">
+        <div class="form-group">
+            <label class="form-label">Admin Verification Code</label>
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <input type="text" class="form-input" value="********" disabled style="width: 200px; font-family: monospace;">
+                <span class="badge badge-success">Active</span>
+            </div>
+            <div style="font-size: 13px; color: var(--text-tertiary); margin-top: 8px;">
+                The admin code is configured via environment variables for security.
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label">Your Admin Status</label>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span class="badge badge-primary">{{ session.get('role', 'admin').upper() }}</span>
+                <span style="font-size: 13px; color: var(--text-secondary);">
+                    Logged in as {{ session.get('user_name') }}
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Info -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">System Information</div>
+    </div>
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+        <div>
+            <div style="font-size: 12px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Application</div>
+            <div style="font-weight: 600;">Bible AI Admin</div>
+        </div>
+        <div>
+            <div style="font-size: 12px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Version</div>
+            <div style="font-weight: 600;">1.0.0</div>
+        </div>
+        <div>
+            <div style="font-size: 12px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Framework</div>
+            <div style="font-weight: 600;">Flask</div>
+        </div>
+        <div>
+            <div style="font-size: 12px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Database</div>
+            <div style="font-weight: 600;">SQLite / PostgreSQL</div>
+        </div>
+    </div>
+</div>
+
+<!-- Danger Zone -->
+<div class="card" style="border-color: var(--danger);">
+    <div class="card-header">
+        <div class="card-title" style="color: var(--danger);">⚠️ Danger Zone</div>
+    </div>
+    
+    <div style="display: grid; gap: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; background: rgba(255, 55, 95, 0.05); border-radius: 12px;">
+            <div>
+                <div style="font-weight: 600;">Clear All Audit Logs</div>
+                <div style="font-size: 13px; color: var(--text-tertiary);">Permanently delete all audit log records. This cannot be undone.</div>
+            </div>
+            <button class="btn btn-danger" onclick="clearAuditLogs()">Clear Logs</button>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; background: rgba(255, 55, 95, 0.05); border-radius: 12px;">
+            <div>
+                <div style="font-weight: 600;">Reset User Statistics</div>
+                <div style="font-size: 13px; color: var(--text-tertiary);">Reset all user counters (likes, saves, comments counts).</div>
+            </div>
+            <button class="btn btn-danger" onclick="resetStats()">Reset Stats</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Load current settings
+    async function loadSettings() {
+        try {
+            const response = await fetch('/admin/api/system/settings');
+            const data = await response.json();
+            
+            if (data.verse_interval) {
+                document.getElementById('verseInterval').value = data.verse_interval;
+            }
+        } catch (e) {
+            console.error('Error loading settings:', e);
+        }
+    }
+    
+    loadSettings();
+    
+    // Save interval
+    async function saveInterval() {
+        const interval = parseInt(document.getElementById('verseInterval').value);
+        
+        try {
+            const response = await fetch('/admin/api/system/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ verse_interval: interval })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showToast('Settings saved successfully');
+            } else {
+                showToast(data.error || 'Error saving settings', 'error');
+            }
+        } catch (e) {
+            showToast('Error saving settings', 'error');
+        }
+    }
+    
+    // Clear audit logs
+    async function clearAuditLogs() {
+        if (!confirm('⚠️ WARNING: This will permanently delete ALL audit logs. This action cannot be undone.\n\nAre you sure you want to continue?')) {
+            return;
+        }
+        
+        if (!confirm('Please confirm again: Delete all audit logs?')) {
+            return;
+        }
+        
+        showToast('This feature requires database access. Please contact your system administrator.', 'warning');
+    }
+    
+    // Reset stats
+    async function resetStats() {
+        if (!confirm('⚠️ WARNING: This will reset all user statistics. This action cannot be undone.\n\nAre you sure you want to continue?')) {
+            return;
+        }
+        
+        showToast('This feature requires database access. Please contact your system administrator.', 'warning');
+    }
+</script>
+{% endblock %}
