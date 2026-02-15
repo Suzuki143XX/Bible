@@ -27,6 +27,27 @@
         <option value="name">Name</option>
         <option value="email">Email</option>
     </select>
+    <button class="btn btn-secondary" onclick="refreshUsers()">🔄 Refresh</button>
+</div>
+
+<!-- Stats Summary -->
+<div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 20px;">
+    <div class="stat-card" style="padding: 16px;">
+        <div class="stat-value" id="statTotal" style="font-size: 24px;">-</div>
+        <div class="stat-label">Total Users</div>
+    </div>
+    <div class="stat-card" style="padding: 16px;">
+        <div class="stat-value" id="statActive" style="font-size: 24px; color: var(--success);">-</div>
+        <div class="stat-label">Active</div>
+    </div>
+    <div class="stat-card" style="padding: 16px;">
+        <div class="stat-value" id="statBanned" style="font-size: 24px; color: var(--danger);">-</div>
+        <div class="stat-label">Banned</div>
+    </div>
+    <div class="stat-card" style="padding: 16px;">
+        <div class="stat-value" id="statAdmins" style="font-size: 24px; color: var(--primary);">-</div>
+        <div class="stat-label">Admins</div>
+    </div>
 </div>
 
 <!-- Users Table -->
@@ -69,6 +90,10 @@
         </div>
         <div class="modal-body">
             <div class="form-group">
+                <label class="form-label">User</label>
+                <div id="banUserName" style="font-weight: 600; padding: 12px; background: var(--surface); border-radius: 8px;"></div>
+            </div>
+            <div class="form-group">
                 <label class="form-label">Ban Reason</label>
                 <textarea class="form-input" id="banReason" rows="3" placeholder="Enter reason for ban..."></textarea>
             </div>
@@ -99,6 +124,10 @@
         </div>
         <div class="modal-body">
             <div class="form-group">
+                <label class="form-label">User</label>
+                <div id="roleUserName" style="font-weight: 600; padding: 12px; background: var(--surface); border-radius: 8px;"></div>
+            </div>
+            <div class="form-group">
                 <label class="form-label">Select Role</label>
                 <select class="form-select" id="newRole">
                     <option value="user">User - Regular user access</option>
@@ -106,6 +135,9 @@
                     <option value="admin">Admin - Full admin access</option>
                     <option value="superadmin">Super Admin - Complete control</option>
                 </select>
+                <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 8px;">
+                    This will also update the user's admin status automatically.
+                </div>
             </div>
         </div>
         <div class="modal-footer">
@@ -120,7 +152,9 @@
 <script>
     let currentPage = 1;
     let selectedUserId = null;
+    let selectedUserName = '';
     let searchTimeout = null;
+    let allUsers = [];
 
     // Load users on page load
     loadUsers();
@@ -158,12 +192,24 @@
                 return;
             }
             
+            allUsers = data.users;
             renderUsers(data.users);
             renderPagination(data.page, data.pages, data.total);
             document.getElementById('totalCount').textContent = `${data.total} users`;
+            
+            // Update stats
+            updateStats(data.users, data.total);
         } catch (e) {
-            showToast('Error loading users', 'error');
+            console.error('Error loading users:', e);
+            showToast('Error loading users: ' + e.message, 'error');
         }
+    }
+    
+    function updateStats(users, total) {
+        document.getElementById('statTotal').textContent = total;
+        document.getElementById('statActive').textContent = users.filter(u => !u.is_banned).length;
+        document.getElementById('statBanned').textContent = users.filter(u => u.is_banned).length;
+        document.getElementById('statAdmins').textContent = users.filter(u => u.role === 'admin' || u.role === 'superadmin').length;
     }
 
     function renderUsers(users) {
@@ -188,7 +234,8 @@
                     <div style="display: flex; align-items: center; gap: 12px;">
                         <img src="${user.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=0a84ff&color=fff`}" 
                              alt="" 
-                             style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                             style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;"
+                             onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=0a84ff&color=fff'">
                         <div>
                             <div style="font-weight: 600;">${user.name}</div>
                             <div style="font-size: 13px; color: var(--text-tertiary);">${user.email}</div>
@@ -200,17 +247,17 @@
                 </td>
                 <td>
                     ${user.is_banned 
-                        ? '<span class="badge badge-danger">Banned</span>' 
-                        : '<span class="badge badge-success">Active</span>'}
+                        ? '<span class="badge badge-danger">🔴 Banned</span>' 
+                        : '<span class="badge badge-success">🟢 Active</span>'}
                 </td>
                 <td>${formatDate(user.created_at)}</td>
                 <td>
                     <div style="display: flex; gap: 8px;">
                         <a href="/admin/user/${user.id}" class="btn btn-sm btn-secondary" title="View Details">👁️</a>
-                        <button class="btn btn-sm btn-secondary" onclick="openRoleModal(${user.id}, '${user.role || 'user'}')" title="Change Role">👑</button>
+                        <button class="btn btn-sm btn-secondary" onclick="openRoleModal(${user.id}, '${user.name}', '${user.role || 'user'}')" title="Change Role">👑</button>
                         ${user.is_banned 
-                            ? `<button class="btn btn-sm btn-primary" onclick="unbanUser(${user.id})" title="Unban User">✓</button>`
-                            : `<button class="btn btn-sm btn-danger" onclick="openBanModal(${user.id})" title="Ban User">🚫</button>`
+                            ? `<button class="btn btn-sm btn-primary" onclick="unbanUser(${user.id}, '${user.name}')" title="Unban User">✓</button>`
+                            : `<button class="btn btn-sm btn-danger" onclick="openBanModal(${user.id}, '${user.name}')" title="Ban User">🚫</button>`
                         }
                     </div>
                 </td>
@@ -259,10 +306,17 @@
         currentPage = page;
         loadUsers();
     }
+    
+    function refreshUsers() {
+        showToast('Refreshing...');
+        loadUsers();
+    }
 
     // Ban Modal
-    function openBanModal(userId) {
+    function openBanModal(userId, userName) {
         selectedUserId = userId;
+        selectedUserName = userName;
+        document.getElementById('banUserName').textContent = userName;
         document.getElementById('banModal').classList.add('active');
         document.getElementById('banReason').value = '';
         document.getElementById('banDuration').value = '';
@@ -271,6 +325,7 @@
     function closeBanModal() {
         document.getElementById('banModal').classList.remove('active');
         selectedUserId = null;
+        selectedUserName = '';
     }
 
     async function confirmBan() {
@@ -289,7 +344,7 @@
             const data = await response.json();
             
             if (data.success) {
-                showToast('User banned successfully');
+                showToast(`${selectedUserName} has been banned`);
                 closeBanModal();
                 loadUsers();
             } else {
@@ -301,8 +356,8 @@
     }
 
     // Unban
-    async function unbanUser(userId) {
-        if (!confirm('Are you sure you want to unban this user?')) return;
+    async function unbanUser(userId, userName) {
+        if (!confirm(`Are you sure you want to unban ${userName}?`)) return;
         
         try {
             const response = await fetch(`/admin/api/user/${userId}/unban`, {
@@ -313,7 +368,7 @@
             const data = await response.json();
             
             if (data.success) {
-                showToast('User unbanned successfully');
+                showToast(`${userName} has been unbanned`);
                 loadUsers();
             } else {
                 showToast(data.error || 'Error unbanning user', 'error');
@@ -324,8 +379,10 @@
     }
 
     // Role Modal
-    function openRoleModal(userId, currentRole) {
+    function openRoleModal(userId, userName, currentRole) {
         selectedUserId = userId;
+        selectedUserName = userName;
+        document.getElementById('roleUserName').textContent = userName;
         document.getElementById('newRole').value = currentRole;
         document.getElementById('roleModal').classList.add('active');
     }
@@ -333,6 +390,7 @@
     function closeRoleModal() {
         document.getElementById('roleModal').classList.remove('active');
         selectedUserId = null;
+        selectedUserName = '';
     }
 
     async function confirmRoleChange() {
@@ -350,7 +408,7 @@
             const data = await response.json();
             
             if (data.success) {
-                showToast('Role updated successfully');
+                showToast(`${selectedUserName}'s role updated to ${newRole}`);
                 closeRoleModal();
                 loadUsers();
             } else {

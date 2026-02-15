@@ -41,7 +41,7 @@
                     <th>Action</th>
                     <th>Target User</th>
                     <th>Details</th>
-                    <th>Timestamp</th>
+                    <th>Time</th>
                 </tr>
             </thead>
             <tbody id="logsTableBody">
@@ -121,8 +121,7 @@
                 filteredLogs = allLogs.filter(log => 
                     log.admin_name.toLowerCase().includes(searchLower) ||
                     log.action.toLowerCase().includes(searchLower) ||
-                    (log.target_name && log.target_name.toLowerCase().includes(searchLower)) ||
-                    (log.details && log.details.toLowerCase().includes(searchLower))
+                    (log.target_name && log.target_name.toLowerCase().includes(searchLower))
                 );
             }
             
@@ -154,49 +153,63 @@
             <tr style="cursor: pointer;" onclick="showLogDetails(${log.id})">
                 <td>#${log.id}</td>
                 <td>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="font-weight: 600;">${log.admin_name}</span>
-                    </div>
+                    <span style="font-weight: 600;">${log.admin_name}</span>
                 </td>
                 <td>
-                    <span class="badge ${getActionBadgeClass(log.action)}">${log.action}</span>
+                    <span class="badge ${getActionBadgeClass(log.action)}">${formatAction(log.action)}</span>
                 </td>
                 <td>${log.target_name || '-'}</td>
-                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text-secondary);">
-                    ${log.details ? formatDetails(log.details) : '-'}
+                <td style="max-width: 250px;">
+                    ${log.details ? formatDetailsPreview(log.details) : '<span style="color: var(--text-tertiary);">-</span>'}
                 </td>
-                <td>${formatDate(log.created_at)}</td>
+                <td>${timeAgo(log.created_at)}</td>
             </tr>
         `).join('');
     }
 
+    function formatAction(action) {
+        return action.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+
     function getActionBadgeClass(action) {
         switch (action) {
-            case 'user_banned':
-                return 'badge-danger';
-            case 'user_unbanned':
-                return 'badge-success';
-            case 'user_updated':
-            case 'user_deleted':
-                return 'badge-warning';
-            case 'admin_verified':
-                return 'badge-primary';
-            case 'system_settings_updated':
-                return 'badge-primary';
-            default:
-                return 'badge-primary';
+            case 'user_banned': return 'badge-danger';
+            case 'user_unbanned': return 'badge-success';
+            case 'user_updated': return 'badge-warning';
+            case 'user_deleted': return 'badge-danger';
+            case 'admin_verified': return 'badge-primary';
+            case 'system_settings_updated': return 'badge-primary';
+            default: return 'badge-primary';
         }
     }
 
-    function formatDetails(details) {
+    function formatDetailsPreview(details) {
         try {
+            let parsed = details;
             if (typeof details === 'string') {
-                const parsed = JSON.parse(details);
-                return Object.entries(parsed).map(([key, value]) => `${key}: ${value}`).join(', ');
+                parsed = JSON.parse(details);
             }
-            return JSON.stringify(details);
+            
+            // Create a nice preview
+            const parts = [];
+            if (parsed.reason) parts.push(`Reason: ${parsed.reason}`);
+            if (parsed.role) parts.push(`Role: ${parsed.role}`);
+            if (parsed.duration) parts.push(`Duration: ${parsed.duration}h`);
+            if (parsed.verse_interval) parts.push(`Interval: ${parsed.verse_interval}s`);
+            
+            if (parts.length > 0) {
+                return `<span style="font-size: 12px; color: var(--text-secondary);">${parts.join(' • ')}</span>`;
+            }
+            
+            // Fallback: show first key-value pair
+            const entries = Object.entries(parsed);
+            if (entries.length > 0) {
+                return `<span style="font-size: 12px; color: var(--text-secondary);">${entries[0][0]}: ${entries[0][1]}</span>`;
+            }
+            
+            return '<span style="color: var(--text-tertiary);">-</span>';
         } catch (e) {
-            return details || '-';
+            return `<span style="font-size: 12px; color: var(--text-secondary);">${String(details).substring(0, 50)}</span>`;
         }
     }
 
@@ -238,31 +251,73 @@
         if (!log) return;
         
         const detailsDiv = document.getElementById('logDetails');
+        
+        // Format details nicely
+        let detailsHtml = '';
+        if (log.details) {
+            try {
+                let parsed = log.details;
+                if (typeof log.details === 'string') {
+                    parsed = JSON.parse(log.details);
+                }
+                
+                detailsHtml = '<div style="display: grid; gap: 12px;">';
+                for (const [key, value] of Object.entries(parsed)) {
+                    const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    let formattedValue = value;
+                    
+                    // Format special values
+                    if (key === 'duration' && value) formattedValue = `${value} hours`;
+                    if (key === 'verse_interval' && value) formattedValue = `${value} seconds`;
+                    if (key === 'expires_at' && value) formattedValue = formatDate(value);
+                    
+                    detailsHtml += `
+                        <div style="background: var(--surface); padding: 12px; border-radius: 8px;">
+                            <div style="font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">${formattedKey}</div>
+                            <div style="font-weight: 600;">${formattedValue || 'N/A'}</div>
+                        </div>
+                    `;
+                }
+                detailsHtml += '</div>';
+            } catch (e) {
+                detailsHtml = `<pre style="background: var(--surface); padding: 12px; border-radius: 8px; margin: 0;">${log.details}</pre>`;
+            }
+        } else {
+            detailsHtml = '<span style="color: var(--text-tertiary);">No additional details</span>';
+        }
+        
         detailsDiv.innerHTML = `
             <div style="display: grid; gap: 16px;">
-                <div>
-                    <div style="font-size: 12px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Log ID</div>
-                    <div style="font-weight: 600; font-family: monospace;">#${log.id}</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Log ID</div>
+                        <div style="font-weight: 600; font-family: monospace;">#${log.id}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Timestamp</div>
+                        <div>${formatDate(log.created_at)}</div>
+                    </div>
                 </div>
-                <div>
-                    <div style="font-size: 12px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Admin</div>
-                    <div style="font-weight: 600;">${log.admin_name}</div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Admin</div>
+                        <div style="font-weight: 600;">${log.admin_name}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Action</div>
+                        <div><span class="badge ${getActionBadgeClass(log.action)}">${formatAction(log.action)}</span></div>
+                    </div>
                 </div>
+                
                 <div>
-                    <div style="font-size: 12px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Action</div>
-                    <div><span class="badge ${getActionBadgeClass(log.action)}">${log.action}</span></div>
-                </div>
-                <div>
-                    <div style="font-size: 12px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Target User</div>
+                    <div style="font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Target User</div>
                     <div style="font-weight: 600;">${log.target_name || 'None'}</div>
                 </div>
+                
                 <div>
-                    <div style="font-size: 12px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Timestamp</div>
-                    <div>${formatDate(log.created_at)}</div>
-                </div>
-                <div>
-                    <div style="font-size: 12px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Details</div>
-                    <pre style="background: var(--surface); padding: 12px; border-radius: 8px; font-size: 13px; overflow-x: auto; margin: 0;">${log.details ? JSON.stringify(typeof log.details === 'string' ? JSON.parse(log.details) : log.details, null, 2) : 'No details'}</pre>
+                    <div style="font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Details</div>
+                    ${detailsHtml}
                 </div>
             </div>
         `;
@@ -275,7 +330,6 @@
     }
 
     function exportLogs() {
-        // Create CSV content
         const headers = ['ID', 'Admin', 'Action', 'Target User', 'Details', 'Timestamp'];
         const rows = allLogs.map(log => [
             log.id,
@@ -288,7 +342,6 @@
         
         const csv = [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
         
-        // Download
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
