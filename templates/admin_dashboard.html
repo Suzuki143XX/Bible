@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --primary: #667eea;
+            --success: #48bb78;
+            --danger: #f56565;
+            --warning: #ed8936;
+            --bg: #0f0f1e;
+            --surface: rgba(255,255,255,0.03);
+            --text: #fff;
+            --text-secondary: #888;
+            --border: rgba(255,255,255,0.1);
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        
+        /* Mobile-first layout */
+        .mobile-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px;
+            background: rgba(255,255,255,0.02);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .mobile-menu-btn {
+            background: none;
+            border: none;
+            color: var(--text);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 5px;
+        }
+        
+        .logo {
+            font-size: 1.3rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: -280px;
+            width: 280px;
+            height: 100vh;
+            background: var(--bg);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            z-index: 200;
+            transition: left 0.3s ease;
+        }
+        
+        .sidebar.active {
+            left: 0;
+        }
+        
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            z-index: 150;
+        }
+        
+        .sidebar-overlay.active {
+            display: block;
+        }
+        
+        .nav-item {
+            padding: 14px 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-bottom: 5px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1rem;
+        }
+        
+        .nav-item:hover, .nav-item.active {
+            background: rgba(102,126,234,0.2);
+        }
+        
+        .nav-item.logout {
+            margin-top: auto;
+            color: #ff6b6b;
+        }
+        
+        .main-content {
+            padding: 15px;
+            max-width: 100%;
+        }
+        
+        .header {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+        }
+        
+        .header-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .role-badge {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .role-owner { background: #ffd700; color: #000; }
+        .role-co_owner { background: #ff6b6b; color: #fff; }
+        .role-mod { background: #4ecdc4; color: #000; }
+        .role-host { background: #95e1d3; color: #000; }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px;
+        }
+        
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-bottom: 6px;
+        }
+        
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+        
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 18px;
+            overflow-x: auto;
+        }
+        
+        .panel-header {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        
+        .search-box {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            padding: 12px 15px;
+            border-radius: 8px;
+            color: var(--text);
+            width: 100%;
+            font-size: 15px;
+        }
+        
+        table {
+            width: 100%;
+            min-width: 600px;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        
+        th, td {
+            text-align: left;
+            padding: 12px 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        th { 
+            color: var(--text-secondary); 
+            font-weight: 500;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+        
+        .user-badge {
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        
+        .badge-user { background: #333; color: #fff; }
+        .badge-host { background: #95e1d3; color: #000; }
+        .badge-mod { background: #4ecdc4; color: #000; }
+        .badge-co_owner { background: #ff6b6b; color: #fff; }
+        .badge-owner { background: #ffd700; color: #000; }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+        }
+        
+        .status-active { background: rgba(72,187,120,0.2); color: #48bb78; }
+        .status-banned { background: rgba(245,101,101,0.2); color: #f56565; }
+        
+        .btn {
+            padding: 8px 14px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-right: 4px;
+            margin-bottom: 4px;
+        }
+        
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-warning { background: var(--warning); color: white; }
+        
+        .hidden { display: none !important; }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 30px;
+            color: var(--text-secondary);
+        }
+        
+        .error-box {
+            background: rgba(245,101,101,0.1);
+            border: 1px solid var(--danger);
+            color: #ff6b6b;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+        
+        .refresh-btn {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: white;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 15px;
+            padding: 25px;
+            width: 100%;
+            max-width: 400px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal h3 {
+            margin-bottom: 15px;
+        }
+        .modal-input, .modal-select {
+            width: 100%;
+            padding: 12px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: white;
+            margin: 10px 0;
+            font-size: 15px;
+        }
+        .duration-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin: 15px 0;
+        }
+        .duration-btn {
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .duration-btn:hover, .duration-btn.selected {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+        
+        /* Comment card for mobile */
+        .comment-card {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 12px;
+        }
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        .comment-text {
+            line-height: 1.5;
+            margin-bottom: 10px;
+        }
+        
+        /* Desktop styles */
+        @media (min-width: 768px) {
+            .mobile-header {
+                display: none;
+            }
+            
+            .sidebar {
+                position: fixed;
+                left: 0;
+                width: 260px;
+                height: 100vh;
+            }
+            
+            .sidebar-overlay {
+                display: none !important;
+            }
+            
+            .main-content {
+                margin-left: 260px;
+                padding: 30px;
+            }
+            
+            .header {
+                flex-direction: row;
+                align-items: center;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            }
+            
+            .panel-header {
+                flex-direction: row;
+                justify-content: space-between;
+            }
+            
+            .search-box {
+                width: 300px;
+            }
+        }
+        
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--success);
+            color: white;
+            padding: 14px 22px;
+            border-radius: 10px;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+            font-size: 0.95rem;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Mobile Header -->
+    <div class="mobile-header">
+        <button class="mobile-menu-btn" onclick="toggleMenu()">☰</button>
+        <div class="logo">⚡ Admin</div>
+        <div style="width: 40px;"></div>
+    </div>
+    
+    <!-- Sidebar Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMenu()"></div>
+    
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="logo" style="margin-bottom: 30px;">⚡ Admin Panel</div>
+        
+        <div class="nav-item active" onclick="showSection('dashboard'); toggleMenu();" data-section="dashboard">
+            <span>📊</span> Dashboard
+        </div>
+        <div class="nav-item" onclick="showSection('users'); toggleMenu();" data-section="users">
+            <span>👥</span> Users
+        </div>
+        <div class="nav-item" onclick="showSection('bans'); toggleMenu();" data-section="bans">
+            <span>🚫</span> Banned Users
+        </div>
+        <div class="nav-item" onclick="showSection('comments'); toggleMenu();" data-section="comments">
+            <span>💬</span> Comments
+        </div>
+        <div class="nav-item" onclick="showSection('audit'); toggleMenu();" data-section="audit">
+            <span>📋</span> Audit Logs
+        </div>
+        <div class="nav-item owner-only hidden" onclick="showSection('settings'); toggleMenu();" data-section="settings">
+            <span>⚙️</span> Settings
+        </div>
+        
+        <div class="nav-item logout" onclick="logout()">
+            <span>🚪</span> Logout
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="header">
+            <h1 id="pageTitle">Dashboard</h1>
+            <div class="header-actions">
+                <button class="refresh-btn" onclick="loadAllData()">🔄 Refresh</button>
+                <a href="/" class="back-btn">🏠 Back to Site</a>
+                <span id="roleBadge" class="role-badge">...</span>
+            </div>
+        </div>
+
+        <!-- Dashboard Section -->
+        <div id="dashboard-section">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Users</div>
+                    <div class="stat-value" id="statUsers">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Active Bans</div>
+                    <div class="stat-value" id="statBans" style="color:#ff6b6b;">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Comments</div>
+                    <div class="stat-value" id="statComments">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Verses</div>
+                    <div class="stat-value" id="statVerses">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Verse Views</div>
+                    <div class="stat-value" id="statViews">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Your Role</div>
+                    <div class="stat-value" style="font-size:1rem;text-transform:uppercase;margin-top:10px;" id="statRole">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Users Section -->
+        <div id="users-section" class="hidden">
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">User Management</div>
+                    <input type="text" class="search-box" placeholder="Search users..." onkeyup="searchUsers(this.value)">
+                </div>
+                <div id="usersContent"><div class="loading">Loading...</div></div>
+            </div>
+        </div>
+
+        <!-- Bans Section -->
+        <div id="bans-section" class="hidden">
+            <div class="panel">
+                <div class="panel-title" style="margin-bottom:18px;">🚫 Banned Users</div>
+                <div id="bansContent"><div class="loading">Loading...</div></div>
+            </div>
+        </div>
+
+        <!-- Comments Section -->
+        <div id="comments-section" class="hidden">
+            <div class="panel">
+                <div class="panel-title" style="margin-bottom:18px;">💬 Comment Moderation</div>
+                <div id="commentsContent"><div class="loading">Loading...</div></div>
+            </div>
+        </div>
+
+        <!-- Audit Section -->
+        <div id="audit-section" class="hidden">
+            <div class="panel">
+                <div class="panel-title" style="margin-bottom:18px;">📋 Audit Logs</div>
+                <div id="auditContent"><div class="loading">Loading...</div></div>
+            </div>
+        </div>
+
+        <!-- Settings Section -->
+        <div id="settings-section" class="hidden">
+            <div class="panel">
+                <div class="panel-title" style="margin-bottom:18px;">⚙️ Settings</div>
+                <div id="settingsContent"><div class="loading">Loading...</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ban Modal with Duration -->
+    <div class="modal-overlay" id="banModal">
+        <div class="modal">
+            <h3>🚫 Ban User</h3>
+            <p style="color:#888;margin:10px 0;font-size:0.9rem;">Select ban duration:</p>
+            <div class="duration-grid">
+                <button class="duration-btn" data-duration="30m" onclick="selectDuration('30m')">30m</button>
+                <button class="duration-btn" data-duration="1h" onclick="selectDuration('1h')">1h</button>
+                <button class="duration-btn" data-duration="2h" onclick="selectDuration('2h')">2h</button>
+                <button class="duration-btn" data-duration="6h" onclick="selectDuration('6h')">6h</button>
+                <button class="duration-btn" data-duration="12h" onclick="selectDuration('12h')">12h</button>
+                <button class="duration-btn" data-duration="24h" onclick="selectDuration('24h')">24h</button>
+                <button class="duration-btn" data-duration="1d" onclick="selectDuration('1d')">1d</button>
+                <button class="duration-btn" data-duration="3d" onclick="selectDuration('3d')">3d</button>
+                <button class="duration-btn" data-duration="7d" onclick="selectDuration('7d')">7d</button>
+                <button class="duration-btn" data-duration="14d" onclick="selectDuration('14d')">14d</button>
+                <button class="duration-btn" data-duration="30d" onclick="selectDuration('30d')">30d</button>
+                <button class="duration-btn selected" data-duration="permanent" onclick="selectDuration('permanent')">∞</button>
+            </div>
+            <input type="text" class="modal-input" id="banReason" placeholder="Reason for ban...">
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn" onclick="closeBanModal()" style="background:#333;color:#fff;">Cancel</button>
+                <button class="btn btn-danger" onclick="confirmBan()">Ban User</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentRole = null;
+        let allUsers = [];
+        let banUserId = null;
+        let selectedDuration = 'permanent';
+
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+            document.getElementById('sidebarOverlay').classList.toggle('active');
+        }
+
+        async function loadAllData() {
+            showToast('Refreshing...');
+            await Promise.all([
+                loadStats(),
+                loadUsers(),
+                loadBans(),
+                loadComments(),
+                loadAuditLogs()
+            ]);
+            showToast('Data refreshed!');
+        }
+
+        async function loadStats() {
+            try {
+                const res = await fetch('/admin/api/stats');
+                const data = await res.json();
+                
+                document.getElementById('statUsers').textContent = data.users ?? 0;
+                document.getElementById('statBans').textContent = data.bans ?? 0;
+                document.getElementById('statComments').textContent = data.comments ?? 0;
+                document.getElementById('statVerses').textContent = data.verses ?? 0;
+                document.getElementById('statViews').textContent = (data.views ?? 0).toLocaleString();
+                document.getElementById('statRole').textContent = data.role ?? '-';
+                
+                currentRole = data.role;
+                
+                const badge = document.getElementById('roleBadge');
+                badge.textContent = data.role ?? '-';
+                badge.className = 'role-badge role-' + data.role;
+                
+                if (data.role === 'owner') {
+                    document.querySelectorAll('.owner-only').forEach(el => el.classList.remove('hidden'));
+                }
+            } catch (err) {
+                console.error('Stats error:', err);
+            }
+        }
+
+        async function loadUsers() {
+            const container = document.getElementById('usersContent');
+            try {
+                const res = await fetch('/admin/api/users');
+                const data = await res.json();
+                
+                if (data.error) {
+                    container.innerHTML = '<div class="error-box">' + data.error + '</div>';
+                    return;
+                }
+                
+                allUsers = data;
+                renderUsers(data);
+            } catch (err) {
+                container.innerHTML = '<div class="error-box">Failed to load users</div>';
+            }
+        }
+
+        function renderUsers(users) {
+            const container = document.getElementById('usersContent');
+            if (!users || users.length === 0) {
+                container.innerHTML = '<div class="empty-state">No users found</div>';
+                return;
+            }
+            
+            let html = '<table><thead><tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+            users.forEach(u => {
+                const statusClass = u.is_banned ? 'status-banned' : 'status-active';
+                const statusText = u.is_banned ? '🚫 Banned' : '✅ Active';
+                html += `<tr>
+                    <td>${escapeHtml(u.name)}</td>
+                    <td>${escapeHtml(u.email)}</td>
+                    <td><span class="user-badge badge-${u.role}">${u.role}</span></td>
+                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                    <td>
+                        <button class="btn btn-primary" onclick="changeRole(${u.id}, '${u.role}')">Role</button>
+                        ${u.is_banned 
+                            ? `<button class="btn btn-success" onclick="unbanUser(${u.id})">Unban</button>`
+                            : `<button class="btn btn-danger" onclick="openBanModal(${u.id})">Ban</button>`
+                        }
+                    </td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function searchUsers(query) {
+            const filtered = allUsers.filter(u => 
+                (u.name && u.name.toLowerCase().includes(query.toLowerCase())) ||
+                (u.email && u.email.toLowerCase().includes(query.toLowerCase()))
+            );
+            renderUsers(filtered);
+        }
+
+        async function loadBans() {
+            const container = document.getElementById('bansContent');
+            try {
+                const res = await fetch('/admin/api/bans');
+                const data = await res.json();
+                
+                if (data.error) {
+                    container.innerHTML = '<div class="error-box">' + data.error + '</div>';
+                    return;
+                }
+                
+                if (!data || data.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No banned users</div>';
+                    return;
+                }
+                
+                let html = '<table><thead><tr><th>User</th><th>Reason</th><th>Duration</th><th>Actions</th></tr></thead><tbody>';
+                data.forEach(b => {
+                    let duration = 'Permanent';
+                    if (b.expires_at) {
+                        const expires = new Date(b.expires_at);
+                        const now = new Date();
+                        const diff = Math.ceil((expires - now) / (1000 * 60 * 60));
+                        duration = diff > 24 ? `${Math.ceil(diff/24)}d` : `${diff}h`;
+                    }
+                    html += `<tr>
+                        <td>${escapeHtml(b.user_name)}<br><small style="color:#888">${escapeHtml(b.user_email)}</small></td>
+                        <td>${escapeHtml(b.reason)}</td>
+                        <td>${duration}</td>
+                        <td><button class="btn btn-success" onclick="unbanUser(${b.user_id})">Unban</button></td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (err) {
+                container.innerHTML = '<div class="error-box">Failed to load bans</div>';
+            }
+        }
+
+        async function loadComments() {
+            const container = document.getElementById('commentsContent');
+            try {
+                const res = await fetch('/admin/api/comments');
+                const data = await res.json();
+                
+                if (data.error) {
+                    container.innerHTML = '<div class="error-box">' + data.error + '</div>';
+                    return;
+                }
+                
+                if (!data || data.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No comments</div>';
+                    return;
+                }
+                
+                let html = '';
+                data.forEach(c => {
+                    html += `
+                        <div class="comment-card">
+                            <div class="comment-header">
+                                <span><strong>${escapeHtml(c.user_name)}</strong> • ${escapeHtml(c.email)}</span>
+                                <span>${new Date(c.timestamp).toLocaleString()}</span>
+                            </div>
+                            <div class="comment-text">${escapeHtml(c.text)}</div>
+                            <div>
+                                <button class="btn btn-danger" onclick="deleteComment(${c.id})">🗑️ Delete</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            } catch (err) {
+                container.innerHTML = '<div class="error-box">Failed to load comments</div>';
+            }
+        }
+
+        async function loadAuditLogs() {
+            const container = document.getElementById('auditContent');
+            try {
+                const res = await fetch('/admin/api/audit-logs');
+                const data = await res.json();
+                
+                if (data.error) {
+                    container.innerHTML = '<div class="error-box">' + data.error + '</div>';
+                    return;
+                }
+                
+                if (!data || data.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No audit logs</div>';
+                    return;
+                }
+                
+                let html = '<table><thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Details</th></tr></thead><tbody>';
+                data.forEach(l => {
+                    const time = l.timestamp ? new Date(l.timestamp).toLocaleString() : '-';
+                    html += `<tr>
+                        <td>${time}</td>
+                        <td>${l.admin_id}</td>
+                        <td>${l.action}</td>
+                        <td>${escapeHtml(l.details || '-')}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (err) {
+                container.innerHTML = '<div class="error-box">Failed to load logs</div>';
+            }
+        }
+
+        async function loadSettings() {
+            const container = document.getElementById('settingsContent');
+            try {
+                const res = await fetch('/admin/api/settings');
+                const data = await res.json();
+                
+                if (!data.is_owner) {
+                    container.innerHTML = '<div class="empty-state">Only owners can view settings</div>';
+                    return;
+                }
+                
+                container.innerHTML = `
+                    <div style="margin-bottom:15px;"><strong>Site:</strong> ${data.site_name}</div>
+                    <div style="margin-bottom:20px;"><strong>Maintenance:</strong> ${data.maintenance_mode}</div>
+                    <h4 style="margin-bottom:15px;">🔐 Role Codes:</h4>
+                    <div style="font-family:monospace;background:rgba(0,0,0,0.3);padding:15px;border-radius:8px;line-height:2;">
+                        <div>Host: ${data.codes.host}</div>
+                        <div>Mod: ${data.codes.mod}</div>
+                        <div>Co-Owner: ${data.codes.co_owner}</div>
+                        <div>Owner: ${data.codes.owner}</div>
+                    </div>
+                    <p style="color:#888;margin-top:20px;font-size:0.85rem;">
+                        💡 Update these in Render environment variables
+                    </p>
+                `;
+            } catch (err) {
+                container.innerHTML = '<div class="error-box">Failed to load settings</div>';
+            }
+        }
+
+        function selectDuration(duration) {
+            selectedDuration = duration;
+            document.querySelectorAll('.duration-btn').forEach(btn => btn.classList.remove('selected'));
+            document.querySelector(`.duration-btn[data-duration="${duration}"]`).classList.add('selected');
+        }
+
+        function openBanModal(userId) {
+            banUserId = userId;
+            document.getElementById('banModal').classList.add('active');
+        }
+
+        function closeBanModal() {
+            document.getElementById('banModal').classList.remove('active');
+            document.getElementById('banReason').value = '';
+            banUserId = null;
+            selectDuration('permanent');
+        }
+
+        async function confirmBan() {
+            if (!banUserId) return;
+            const reason = document.getElementById('banReason').value.trim() || 'No reason';
+            
+            try {
+                const res = await fetch(`/admin/api/users/${banUserId}/ban`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({banned: true, reason, duration: selectedDuration})
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    closeBanModal();
+                    showToast('User banned!');
+                    loadAllData();
+                } else {
+                    alert(data.error || 'Failed to ban');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function unbanUser(userId) {
+            if (!confirm('Unban this user?')) return;
+            
+            try {
+                const res = await fetch(`/admin/api/users/${userId}/ban`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({banned: false})
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('User unbanned!');
+                    loadAllData();
+                } else {
+                    alert(data.error || 'Failed to unban');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function deleteComment(commentId) {
+            if (!confirm('Delete this comment?')) return;
+            
+            try {
+                const res = await fetch(`/admin/api/comments/${commentId}`, {method: 'DELETE'});
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('Comment deleted!');
+                    loadComments();
+                } else {
+                    alert(data.error || 'Failed to delete');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function changeRole(userId, currentRole) {
+            const roles = ['user', 'host', 'mod', 'co_owner', 'owner'];
+            const newRole = prompt(`Change role to:\n${roles.join(', ')}`, currentRole);
+            if (!newRole || newRole === currentRole) return;
+            
+            try {
+                const res = await fetch(`/admin/api/users/${userId}/role`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({role: newRole})
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('Role updated!');
+                    loadUsers();
+                } else {
+                    alert(data.error || 'Failed');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        function showSection(section) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.querySelector(`.nav-item[data-section="${section}"]`)?.classList.add('active');
+            document.querySelectorAll('[id$="-section"]').forEach(el => el.classList.add('hidden'));
+            document.getElementById(section + '-section').classList.remove('hidden');
+            
+            const titles = {dashboard: 'Dashboard', users: 'Users', bans: 'Banned Users', comments: 'Comments', audit: 'Audit Logs', settings: 'Settings'};
+            document.getElementById('pageTitle').textContent = titles[section] || 'Dashboard';
+            
+            if (section === 'settings') loadSettings();
+        }
+
+        async function logout() {
+            await fetch('/admin/logout', {method: 'POST'});
+            window.location.href = '/admin/login';
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showToast(msg) {
+            const existing = document.querySelector('.toast');
+            if (existing) existing.remove();
+            
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // Initialize
+        loadAllData();
+    </script>
+</body>
+</html>
