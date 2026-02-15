@@ -22,6 +22,14 @@ services:
         sync: false
       - key: ADMIN_PASSWORD
         sync: false
+      - key: HOST_CODE
+        sync: false
+      - key: MOD_CODE
+        sync: false
+      - key: CO_OWNER_CODE
+        sync: false
+      - key: OWNER_CODE
+        sync: false
 
 databases:
   - name: bible-ai-db
