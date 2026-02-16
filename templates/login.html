@@ -1,10 +1,24 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bible AI</title>
+    <title>Bible AI Login</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;800&family=Manrope:wght@400;600;700&display=swap');
+
+        :root {
+            --bg: #02030a;
+            --panel: rgba(11, 16, 34, 0.72);
+            --panel-2: rgba(255,255,255,0.06);
+            --border: rgba(255,255,255,0.16);
+            --text: #eef3ff;
+            --muted: #a7b3d5;
+            --primary: #2d8cff;
+            --primary-2: #5d5fef;
+            --green: #22c55e;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -12,172 +26,399 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        html {
-            height: 100%;
-            background: #000;
+        html, body {
+            min-height: 100%;
+            background: var(--bg);
+            color: var(--text);
+            font-family: "Manrope", "Segoe UI", sans-serif;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
-            background: linear-gradient(180deg, #0f0f13 0%, #000000 100%);
+            overflow: hidden;
+            position: relative;
+        }
+        body:not(.ready) .hero,
+        body:not(.ready) .auth-card,
+        body:not(.ready) .hero-badge,
+        body:not(.ready) .tile,
+        body:not(.ready) .google-btn {
+            opacity: 0;
+            transform: translateY(12px) scale(0.98);
+        }
+
+        .stage {
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(780px 500px at -12% -10%, rgba(45,140,255,0.34), transparent 66%),
+                radial-gradient(720px 420px at 112% 8%, rgba(93,95,239,0.28), transparent 66%),
+                radial-gradient(620px 360px at 50% 112%, rgba(34,197,94,0.18), transparent 72%),
+                linear-gradient(180deg, #060a19 0%, #02030a 100%);
+            z-index: 0;
+        }
+
+        .stage::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px);
+            background-size: 38px 38px;
+            opacity: 0.18;
+            mask-image: radial-gradient(circle at 50% 45%, black 24%, transparent 76%);
+        }
+
+        .glow {
+            position: absolute;
+            width: 42vw;
+            height: 42vw;
+            border-radius: 999px;
+            filter: blur(60px);
+            opacity: 0.45;
+            animation: float 7s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        .glow.g1 { left: -14vw; top: 8vh; background: #1677ff; }
+        .glow.g2 { right: -14vw; top: -2vh; background: #5d5fef; animation-delay: 1.4s; }
+        .glow.g3 { left: 28vw; bottom: -18vh; background: #22c55e; animation-delay: 2.1s; }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-14px) scale(1.06); }
+        }
+
+        .wrap {
+            position: relative;
+            z-index: 2;
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            overflow: hidden;
-            position: relative;
+            display: grid;
+            place-items: center;
+            padding: 20px;
         }
 
-        body::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(10, 132, 255, 0.15) 0%, transparent 70%);
-            animation: pulse 4s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 0.5; }
-            50% { transform: scale(1.1); opacity: 0.8; }
-        }
-
-        .login-container {
-            position: relative;
-            z-index: 1;
-            text-align: center;
-            padding: 40px;
-            width: 100%;
-            max-width: 400px;
-        }
-
-        .app-icon {
-            width: 120px;
-            height: 120px;
-            background: linear-gradient(135deg, #0a84ff, #5e5ce6);
+        .shell {
+            width: min(1120px, 100%);
             border-radius: 28px;
-            margin: 0 auto 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 60px;
-            box-shadow: 0 20px 60px rgba(10, 132, 255, 0.4);
-            position: relative;
+            border: 1px solid var(--border);
+            background: var(--panel);
+            backdrop-filter: blur(22px) saturate(150%);
+            box-shadow: 0 28px 70px rgba(0,0,0,0.45);
             overflow: hidden;
+            display: grid;
+            grid-template-columns: 1fr;
         }
 
-        .app-icon::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, rgba(255,255,255,0.3), transparent);
+        @media (min-width: 980px) {
+            .shell {
+                grid-template-columns: 1.08fr 0.92fr;
+                min-height: 670px;
+            }
         }
 
-        h1 {
-            font-size: 32px;
+        .hero {
+            padding: 28px 22px 22px;
+            border-bottom: 1px solid var(--border);
+            position: relative;
+            transition: opacity .55s ease, transform .55s cubic-bezier(.2,.7,.2,1);
+        }
+
+        @media (min-width: 980px) {
+            .hero {
+                padding: 38px 34px 34px;
+                border-bottom: none;
+                border-right: 1px solid var(--border);
+            }
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(45,140,255,0.35);
+            background: rgba(45,140,255,0.18);
+            color: #bfdaff;
+            font-size: 11px;
             font-weight: 700;
-            margin-bottom: 12px;
-            letter-spacing: -0.02em;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            padding: 7px 11px;
+            margin-bottom: 16px;
+            transition: opacity .45s ease, transform .45s ease;
         }
 
-        .subtitle {
-            font-size: 17px;
-            color: rgba(255,255,255,0.6);
-            margin-bottom: 48px;
-            font-weight: 400;
+        .brand {
+            display: flex;
+            gap: 14px;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .logo {
+            width: 60px;
+            height: 60px;
+            border-radius: 18px;
+            background: radial-gradient(circle at 28% 18%, rgba(255,255,255,0.33), transparent 58%), linear-gradient(145deg, #0a84ff, #4cc9f0 50%, #30d158);
+            border: 1px solid rgba(255,255,255,0.24);
+            box-shadow: 0 10px 28px rgba(10,132,255,0.36);
+            display: grid;
+            place-items: center;
+            font-size: 28px;
+            font-weight: 800;
+            font-family: "Space Grotesk", sans-serif;
+        }
+
+        .brand-name {
+            font-family: "Space Grotesk", sans-serif;
+            font-size: clamp(1.9rem, 1.35rem + 2vw, 3rem);
+            line-height: .95;
+            letter-spacing: -0.04em;
+            font-weight: 800;
+        }
+
+        .brand-sub {
+            margin-top: 7px;
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+
+        .hero-headline {
+            margin-top: 20px;
+            font-family: "Space Grotesk", sans-serif;
+            font-size: clamp(1.4rem, 1rem + 1.45vw, 2.1rem);
+            line-height: 1.12;
+            letter-spacing: -0.02em;
+            max-width: 18ch;
+        }
+
+        .hero-copy {
+            margin-top: 12px;
+            color: #c6d1ee;
+            max-width: 54ch;
+            line-height: 1.58;
+            font-size: 0.95rem;
+        }
+
+        .tiles {
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+
+        @media (min-width: 640px) {
+            .tiles {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .tile {
+            background: var(--panel-2);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 14px;
+            padding: 12px;
+            display: flex;
+            gap: 9px;
+            align-items: flex-start;
+            font-size: 0.88rem;
+            color: #d8e0f5;
+            transition: opacity .45s ease, transform .45s ease;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            margin-top: 7px;
+            flex-shrink: 0;
+            background: linear-gradient(135deg, var(--primary), var(--green));
+            box-shadow: 0 0 0 5px rgba(45,140,255,0.14);
+        }
+
+        .auth {
+            padding: 24px 20px;
+            display: grid;
+            place-items: center;
+        }
+
+        @media (min-width: 980px) {
+            .auth {
+                padding: 34px;
+            }
+        }
+
+        .auth-card {
+            width: 100%;
+            max-width: 420px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 22px;
+            transition: opacity .6s ease, transform .6s cubic-bezier(.2,.7,.2,1);
+        }
+
+        @media (min-width: 600px) {
+            .auth-card {
+                padding: 26px;
+            }
+        }
+
+        .auth-title {
+            font-family: "Space Grotesk", sans-serif;
+            font-size: clamp(1.35rem, 1.02rem + 1.15vw, 1.8rem);
+            line-height: 1.03;
+            letter-spacing: -0.02em;
+            margin-bottom: 8px;
+        }
+
+        .auth-sub {
+            color: var(--muted);
+            font-size: 0.93rem;
+            line-height: 1.5;
+            margin-bottom: 18px;
         }
 
         .google-btn {
             width: 100%;
-            height: 56px;
-            background: white;
+            min-height: 58px;
             border: none;
             border-radius: 14px;
-            color: black;
-            font-size: 17px;
-            font-weight: 600;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
+            background: #ffffff;
+            color: #121620;
             text-decoration: none;
-            transition: all 0.3s;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            font-size: 1rem;
+            font-weight: 800;
+            box-shadow: 0 16px 36px rgba(0,0,0,0.34);
+            transition: transform .17s ease, box-shadow .17s ease;
+        }
+        body.ready .google-btn {
+            animation: ctaPop .48s cubic-bezier(.18,.8,.22,1.2) .42s both;
+        }
+
+        body.ready .hero-badge { transition-delay: .08s; }
+        body.ready .hero { transition-delay: .12s; }
+        body.ready .tile:nth-child(1) { transition-delay: .2s; }
+        body.ready .tile:nth-child(2) { transition-delay: .26s; }
+        body.ready .tile:nth-child(3) { transition-delay: .32s; }
+        body.ready .tile:nth-child(4) { transition-delay: .38s; }
+        body.ready .auth-card { transition-delay: .18s; }
+
+        body.ready .hero,
+        body.ready .auth-card,
+        body.ready .hero-badge,
+        body.ready .tile,
+        body.ready .google-btn {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        @keyframes ctaPop {
+            0% { transform: scale(0.92); }
+            65% { transform: scale(1.03); }
+            100% { transform: scale(1); }
+        }
+
+        .google-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.38);
         }
 
         .google-btn:active {
-            transform: scale(0.96);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            transform: translateY(1px);
+            box-shadow: 0 10px 24px rgba(0,0,0,0.3);
         }
 
-        .features {
-            margin-top: 48px;
-            text-align: left;
+        .helper {
+            margin-top: 13px;
+            color: #96a3c7;
+            font-size: 0.78rem;
+            line-height: 1.45;
         }
 
-        .feature {
+        .meta {
+            margin-top: 14px;
             display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
             align-items: center;
-            gap: 16px;
-            margin: 20px 0;
-            font-size: 15px;
-            color: rgba(255,255,255,0.8);
+            color: #9ca8c8;
+            font-size: 0.79rem;
         }
 
-        .feature-icon {
-            width: 36px;
-            height: 36px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            flex-shrink: 0;
+        .meta a {
+            color: #8bc0ff;
+            text-decoration: none;
         }
 
-        .feature-text {
-            font-weight: 500;
+        .meta a:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
 <body>
-    <div class="login-container">
-        <div class="app-icon">📖</div>
-        <h1>Bible AI</h1>
-        <p class="subtitle">Divine wisdom, delivered</p>
-        
-        <a href="/google-login" class="google-btn">
-            <svg width="20" height="20" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            Continue with Google
-        </a>
-
-        <div class="features">
-            <div class="feature">
-                <div class="feature-icon">✨</div>
-                <span class="feature-text">Auto-generates verses every minute</span>
-            </div>
-            <div class="feature">
-                <div class="feature-icon">🎯</div>
-                <span class="feature-text">AI-powered recommendations</span>
-            </div>
-            <div class="feature">
-                <div class="feature-icon">✍️</div>
-                <span class="feature-text">George-curated selections</span>
-            </div>
-        </div>
+    <div class="stage">
+        <div class="glow g1"></div>
+        <div class="glow g2"></div>
+        <div class="glow g3"></div>
     </div>
+
+    <div class="wrap">
+        <section class="shell">
+            <div class="hero">
+                <div class="hero-badge">New Experience</div>
+                <div class="brand">
+                    <div class="logo">+</div>
+                    <div>
+                        <div class="brand-name">Bible AI</div>
+                        <div class="brand-sub">Built for focus, faith, and community</div>
+                    </div>
+                </div>
+
+                <div class="hero-headline">A stronger daily scripture experience, redesigned.</div>
+                <p class="hero-copy">Your updated platform now blends intelligent verse discovery, personal library tools, and guided community interaction in one streamlined flow.</p>
+
+                <div class="tiles">
+                    <div class="tile"><span class="dot"></span><span>Live verse refresh with better pacing controls.</span></div>
+                    <div class="tile"><span class="dot"></span><span>Smarter recommendations and curated reading paths.</span></div>
+                    <div class="tile"><span class="dot"></span><span>Modern comments, reactions, and profile insights.</span></div>
+                    <div class="tile"><span class="dot"></span><span>Expanded admin safety and analytics systems.</span></div>
+                </div>
+            </div>
+
+            <div class="auth">
+                <div class="auth-card">
+                    <div class="auth-title">Sign in to continue</div>
+                    <p class="auth-sub">Use Google to sync your progress, favorites, and community activity across devices.</p>
+
+                    <a href="/google-login" class="google-btn" aria-label="Continue with Google">
+                        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                        </svg>
+                        <span>Continue with Google</span>
+                    </a>
+
+                    <div class="helper">Secure OAuth is used only for authentication and profile continuity.</div>
+                    <div class="meta">
+                        <span>Community partner:</span>
+                        <a href="https://www.crossforall.com/about" target="_blank" rel="noopener noreferrer">Cross For All</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            requestAnimationFrame(() => document.body.classList.add('ready'));
+        });
+    </script>
 </body>
 </html>
