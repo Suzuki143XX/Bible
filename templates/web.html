@@ -3602,6 +3602,11 @@
         let verseCheckInterval = null;
         let presencePingInterval = null;
         let notificationPollInterval = null;
+        const VERSE_POLL_INTERVAL_MS = 3000;
+        const STATUS_REFRESH_INTERVAL_MS = 10000;
+        let verseFetchInFlight = false;
+        let lastStatusRefreshAt = 0;
+        let lastStatusVerseId = null;
         let latestNotificationId = null;
         let isAdmin = false;
         let favoritesCollection = null;
@@ -3636,7 +3641,7 @@
             initGlobalFontScaling();
             initPermanentTimer();
             fetchVerse();
-            verseCheckInterval = setInterval(fetchVerse, 1000);
+            verseCheckInterval = setInterval(fetchVerse, VERSE_POLL_INTERVAL_MS);
             checkAdminStatus();
             
             // Setup textarea auto-resize
@@ -4026,6 +4031,8 @@
 
         // Verse Handling
         async function fetchVerse() {
+            if (verseFetchInFlight) return;
+            verseFetchInFlight = true;
             try {
                 const res = await fetch('/api/current');
                 const data = await res.json();
@@ -4068,10 +4075,23 @@
                         if (currentTab === 'comments') loadComments();
                     }
                     
-                    checkStatus(data.verse.id);
+                    const now = Date.now();
+                    const verseId = data.verse.id;
+                    const shouldRefreshStatus = (
+                        isNew ||
+                        verseId !== lastStatusVerseId ||
+                        (now - lastStatusRefreshAt) >= STATUS_REFRESH_INTERVAL_MS
+                    );
+                    if (shouldRefreshStatus) {
+                        await checkStatus(verseId);
+                        lastStatusRefreshAt = now;
+                        lastStatusVerseId = verseId;
+                    }
                 }
             } catch (e) {
                 console.error('Fetch error:', e);
+            } finally {
+                verseFetchInFlight = false;
             }
         }
 
