@@ -189,7 +189,7 @@ def _extract_target_user_id(details):
     return None
 
 def _parse_details_fields(details):
-    """Extract reason/duration/name hints from legacy text details."""
+    """Extract normalized fields from JSON or legacy text details."""
     raw = details if details is not None else ""
     text = str(raw).strip()
     parsed = {}
@@ -202,11 +202,35 @@ def _parse_details_fields(details):
         try:
             obj = json.loads(text)
             if isinstance(obj, dict):
+                # New structured format
+                msg = obj.get("message")
+                if msg is not None:
+                    parsed["message"] = str(msg)
+
+                status_val = obj.get("status")
+                if status_val is not None:
+                    parsed["status"] = str(status_val).strip().lower()
+
+                location_val = obj.get("location")
+                if isinstance(location_val, dict):
+                    parsed["location"] = location_val
+
+                extras_val = obj.get("extras")
+                if isinstance(extras_val, dict):
+                    parsed["extras"] = extras_val
+
+                target_val = obj.get("target")
+                if isinstance(target_val, dict):
+                    parsed["target"] = target_val
+                    tname = target_val.get("name")
+                    if tname:
+                        parsed["target_name_hint"] = str(tname)
+
                 reason_val = (
                     obj.get("reason")
                     or obj.get("ban_reason")
                     or obj.get("restriction_reason")
-                    or obj.get("message")
+                    or obj.get("reason_text")
                 )
                 duration_val = obj.get("duration") or obj.get("ban_duration") or obj.get("hours")
                 target_name_val = (
@@ -241,13 +265,27 @@ def _parse_details_fields(details):
     if nm:
         parsed["target_name_hint"] = nm.group(1).strip()
 
+    parsed["message"] = text
     return parsed
 
 def _fetch_user_personas(c, db_type, user_ids):
     if not user_ids:
         return {}
 
-    ordered_ids = sorted(set(int(uid) for uid in user_ids if uid is not None))
+    ordered_ids = []
+    seen = set()
+    for uid in user_ids:
+        if uid is None:
+            continue
+        try:
+            normalized = int(str(uid).strip())
+        except Exception:
+            continue
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        ordered_ids.append(normalized)
+    ordered_ids.sort()
     if not ordered_ids:
         return {}
 
@@ -277,6 +315,24 @@ def _fetch_user_personas(c, db_type, user_ids):
                 "role": row[3] or "user"
             }
     return personas
+
+def _safe_json_dumps(value):
+    try:
+        return json.dumps(value, ensure_ascii=False)
+    except Exception:
+        return json.dumps({"message": str(value)}, ensure_ascii=False)
+
+def _request_location_snapshot():
+    # Do not call external APIs here; extract best-effort location from common proxy headers.
+    forwarded_for = request.headers.get('X-Forwarded-For', '')
+    ip = (forwarded_for.split(',')[0].strip() if forwarded_for else '') or request.headers.get('X-Real-IP') or request.remote_addr or 'unknown'
+    return {
+        "ip": ip,
+        "country": request.headers.get('CF-IPCountry') or request.headers.get('X-Country-Code') or "",
+        "region": request.headers.get('X-Region') or request.headers.get('CF-Region') or "",
+        "city": request.headers.get('X-City') or request.headers.get('CF-IPCity') or "",
+        "timezone": request.headers.get('CF-Timezone') or ""
+    }
 
 def _read_audit_logs(c, db_type, limit=100, offset=0, action=None):
     cols = _get_table_columns(c, db_type, 'audit_logs')
@@ -320,7 +376,8 @@ def _read_audit_logs(c, db_type, limit=100, offset=0, action=None):
     rows = c.fetchall()
 
     base_logs = []
-    user_ids = set()
+    target_user_ids = set()
+    admin_user_ids = set()
     for row in rows:
         if hasattr(row, 'keys'):
             log = {
@@ -346,36 +403,69 @@ def _read_audit_logs(c, db_type, limit=100, offset=0, action=None):
         if log["target_user_id"] is None:
             log["target_user_id"] = _extract_target_user_id(log["details"])
         if log["target_user_id"] is not None:
-            user_ids.add(log["target_user_id"])
+            target_user_ids.add(log["target_user_id"])
+        try:
+            admin_uid = int(str(log["admin_id"]).strip())
+            admin_user_ids.add(admin_uid)
+        except Exception:
+            pass
         base_logs.append(log)
 
-    personas = _fetch_user_personas(c, db_type, user_ids)
+    personas = _fetch_user_personas(c, db_type, target_user_ids)
+    admin_personas = _fetch_user_personas(c, db_type, admin_user_ids)
     logs = []
     for log in base_logs:
         persona = personas.get(log["target_user_id"])
         parsed_details = _parse_details_fields(log["details"])
+        location = parsed_details.get("location") if isinstance(parsed_details.get("location"), dict) else {}
+        extras = parsed_details.get("extras") if isinstance(parsed_details.get("extras"), dict) else {}
+        target_obj = parsed_details.get("target") if isinstance(parsed_details.get("target"), dict) else {}
+        try:
+            admin_uid = int(str(log["admin_id"]).strip())
+        except Exception:
+            admin_uid = None
+        admin_persona = admin_personas.get(admin_uid) if admin_uid is not None else None
         target_name = persona["name"] if persona else (parsed_details.get("target_name_hint") or "")
+        details_message = parsed_details.get("message") or (log["details"] if log["details"] is not None else "")
+        status = parsed_details.get("status") or ("success" if (log["action"] or "").upper() not in ("ERROR", "FAILED") else "failed")
+        reason = parsed_details.get("reason") or (extras.get("reason") if isinstance(extras, dict) else "") or ""
+        duration = parsed_details.get("duration") or (extras.get("duration") if isinstance(extras, dict) else "") or ""
         logs.append({
             "id": log["id"],
             "admin_id": log["admin_id"],
-            "admin_name": log["admin_id"],
+            "admin_name": (admin_persona["name"] if admin_persona else log["admin_id"]),
             "action": log["action"],
-            "details": log["details"],
+            "details": details_message,
             "ip_address": log["ip_address"],
             "timestamp": log["timestamp"],
             "created_at": log["timestamp"],  # compatibility for existing audit UI
+            "status": status,
+            "location": {
+                "ip": location.get("ip") or log["ip_address"] or "",
+                "country": location.get("country") or "",
+                "region": location.get("region") or "",
+                "city": location.get("city") or "",
+                "timezone": location.get("timezone") or ""
+            },
             "target_user_id": log["target_user_id"],
             "target_name": target_name,
-            "target_email": persona["email"] if persona else "",
-            "target_role": persona["role"] if persona else "",
+            "target_email": persona["email"] if persona else (target_obj.get("email", "") if isinstance(target_obj, dict) else ""),
+            "target_role": persona["role"] if persona else (target_obj.get("role", "") if isinstance(target_obj, dict) else ""),
             "target_persona": persona if persona else None,
-            "reason": parsed_details.get("reason", ""),
-            "duration": parsed_details.get("duration", "")
+            "target": {
+                "user_id": log["target_user_id"],
+                "name": target_name,
+                "email": persona["email"] if persona else (target_obj.get("email", "") if isinstance(target_obj, dict) else ""),
+                "role": persona["role"] if persona else (target_obj.get("role", "") if isinstance(target_obj, dict) else "")
+            },
+            "reason": reason,
+            "duration": duration,
+            "extras": extras
         })
 
     return logs, total
 
-def log_action(action, details="", target_user_id=None):
+def log_action(action, details="", target_user_id=None, status="success", extras=None, target=None):
     try:
         conn, db_type = get_db()
         c = conn.cursor()
@@ -383,17 +473,28 @@ def log_action(action, details="", target_user_id=None):
         admin = get_admin_session()
         admin_id = admin['role'] if admin else 'unknown'
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        payload = {
+            "message": str(details or ""),
+            "status": str(status or "success").lower(),
+            "location": _request_location_snapshot(),
+            "extras": extras if isinstance(extras, dict) else {}
+        }
+        if isinstance(target, dict):
+            payload["target"] = target
+        elif target_user_id is not None:
+            payload["target"] = {"user_id": target_user_id}
+        details_json = _safe_json_dumps(payload)
         
         if db_type == 'postgres':
             c.execute("""
                 INSERT INTO audit_logs (admin_id, action, details, ip_address, timestamp, target_user_id)
                 VALUES (%s, %s, %s, %s, %s, %s)
-            """, (admin_id, action, details, request.remote_addr, timestamp, target_user_id))
+            """, (admin_id, action, details_json, payload.get("location", {}).get("ip") or request.remote_addr, timestamp, target_user_id))
         else:
             c.execute("""
                 INSERT INTO audit_logs (admin_id, action, details, ip_address, timestamp, target_user_id)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (admin_id, action, details, request.remote_addr, timestamp, target_user_id))
+            """, (admin_id, action, details_json, payload.get("location", {}).get("ip") or request.remote_addr, timestamp, target_user_id))
         conn.commit()
         conn.close()
     except Exception as e:
@@ -434,7 +535,12 @@ def verify_code():
         if code == role_code:
             session['admin_role'] = role
             session['admin_code'] = code
-            log_action("ADMIN_LOGIN", f"Role: {role}")
+            log_action(
+                "ADMIN_LOGIN",
+                f"Role: {role}",
+                status="success",
+                extras={"module": "admin_auth", "event": "verify_code"}
+            )
             return jsonify({"success": True, "role": role, "redirect": "/admin/dashboard"})
     
     return jsonify({"success": False, "error": "Invalid code"}), 401
@@ -826,7 +932,14 @@ def restrict_user(user_id):
         print(f"[DEBUG] Verification query result: {verify}")
         
         # Log the action BEFORE closing connection
-        log_action("RESTRICT_COMMENTS", f"Restricted {user_name} ({user_id}) for {hours}h: {reason}", target_user_id=user_id)
+        log_action(
+            "RESTRICT_COMMENTS",
+            f"Restricted {user_name} ({user_id}) for {hours}h: {reason}",
+            target_user_id=user_id,
+            status="success",
+            extras={"reason": reason, "duration": f"{hours}h", "module": "comments"},
+            target={"user_id": user_id, "name": user_name, "role": user_role}
+        )
         
         conn.close()
         print(f"[DEBUG] Restriction successful for user {user_id}")
@@ -853,7 +966,13 @@ def remove_restriction(user_id):
         conn.commit()
         conn.close()
         
-        log_action("UNRESTRICT", f"Removed comment restriction from user {user_id}", target_user_id=user_id)
+        log_action(
+            "UNRESTRICT",
+            f"Removed comment restriction from user {user_id}",
+            target_user_id=user_id,
+            status="success",
+            extras={"module": "comments", "event": "restriction_removed"}
+        )
         return jsonify({"success": True})
     except Exception as e:
         print(f"[ERROR] Unrestrict: {e}")
@@ -1075,7 +1194,12 @@ def delete_comment(comment_id):
         conn.commit()
         conn.close()
         
-        log_action("DELETE_COMMENT", f"Deleted {comment_type} {comment_id}")
+        log_action(
+            "DELETE_COMMENT",
+            f"Deleted {comment_type} {comment_id}",
+            status="success",
+            extras={"comment_type": comment_type, "comment_id": comment_id}
+        )
         return jsonify({"success": True})
     except Exception as e:
         print(f"[ERROR] Delete comment: {e}")
@@ -1169,7 +1293,14 @@ def ban_user(user_id):
                     VALUES (?, ?, ?, ?, ?)
                 """, (user_id, reason, admin['role'], datetime.now().isoformat(), expires_at))
             
-            log_action("BAN", f"Banned {user_name} ({user_id}) for {duration}: {reason}", target_user_id=user_id)
+            log_action(
+                "BAN",
+                f"Banned {user_name} ({user_id}) for {duration}: {reason}",
+                target_user_id=user_id,
+                status="success",
+                extras={"reason": reason, "duration": duration, "expires_at": expires_at, "module": "moderation"},
+                target={"user_id": user_id, "name": user_name, "role": target_role}
+            )
         else:
             if db_type == 'postgres':
                 c.execute("UPDATE users SET is_banned = FALSE WHERE id = %s", (user_id,))
@@ -1177,7 +1308,14 @@ def ban_user(user_id):
             else:
                 c.execute("UPDATE users SET is_banned = 0 WHERE id = ?", (user_id,))
                 c.execute("DELETE FROM bans WHERE user_id = ?", (user_id,))
-            log_action("UNBAN", f"Unbanned {user_name} ({user_id})", target_user_id=user_id)
+            log_action(
+                "UNBAN",
+                f"Unbanned {user_name} ({user_id})",
+                target_user_id=user_id,
+                status="success",
+                extras={"module": "moderation", "event": "ban_removed"},
+                target={"user_id": user_id, "name": user_name, "role": target_role}
+            )
         
         conn.commit()
         conn.close()
@@ -1231,7 +1369,13 @@ def update_user_role(user_id):
         conn.commit()
         conn.close()
         
-        log_action("UPDATE_ROLE", f"User {user_id} to {new_role}", target_user_id=user_id)
+        log_action(
+            "UPDATE_ROLE",
+            f"User {user_id} to {new_role}",
+            target_user_id=user_id,
+            status="success",
+            extras={"new_role": new_role, "previous_role": current_role, "module": "users"}
+        )
         return jsonify({"success": True})
     except Exception as e:
         print(f"[ERROR] Update role: {e}")
@@ -1541,7 +1685,12 @@ def update_system_settings():
             updates.append(f"show_user_persona={show_user_persona}")
 
         if updates:
-            log_action("UPDATE_SETTINGS", "Updated system settings: " + ", ".join(updates))
+            log_action(
+                "UPDATE_SETTINGS",
+                "Updated system settings: " + ", ".join(updates),
+                status="success",
+                extras={"updated_keys": updates, "module": "settings"}
+            )
 
         conn.commit()
         conn.close()
