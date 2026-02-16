@@ -373,6 +373,61 @@
             }
         }
 
+        .lovewell-credit {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            gap: 4px;
+            margin: 0 8px;
+            min-width: 96px;
+            max-width: 130px;
+        }
+
+        .lovewell-credit-text {
+            font-size: 11px;
+            line-height: 1.25;
+            color: var(--text-tertiary);
+        }
+
+        @media (max-width: 767px) {
+            .header {
+                display: grid;
+                grid-template-columns: auto 1fr auto;
+                gap: 10px;
+                align-items: center;
+            }
+            .brand {
+                min-width: 0;
+            }
+            .brand-text {
+                font-size: 17px;
+                line-height: 1.05;
+            }
+            .lovewell-credit {
+                min-width: 0;
+                max-width: 110px;
+                margin: 0;
+            }
+            .lovewell-logo {
+                width: 60px;
+                margin-bottom: 2px;
+            }
+            .lovewell-credit-text {
+                font-size: 9px;
+                line-height: 1.18;
+            }
+            .header-actions {
+                gap: 8px;
+            }
+            .icon-btn {
+                width: 36px;
+                height: 36px;
+                font-size: 16px;
+            }
+        }
+
         .brand-text {
             font-size: 20px;
             font-weight: 700;
@@ -436,6 +491,16 @@
         }
 
         @media (min-width: 1024px) {
+            .lovewell-credit {
+                margin-top: auto;
+                padding-top: 15px;
+                border-top: 1px solid var(--glass-border);
+                max-width: 100%;
+            }
+            .lovewell-credit-text {
+                font-size: 10px;
+                max-width: 180px;
+            }
             .header-actions {
                 margin-top: auto;
                 justify-content: center;
@@ -505,6 +570,14 @@
             animation: tabEnter calc(0.34s * var(--animation-speed)) cubic-bezier(0.2, 0.7, 0.2, 1);
         }
 
+        body.tab-discover .ambient-bg { filter: hue-rotate(0deg) saturate(1.02); }
+        body.tab-recommendations .ambient-bg { filter: hue-rotate(26deg) saturate(1.08); }
+        body.tab-library .ambient-bg { filter: hue-rotate(52deg) saturate(1.08); }
+        body.tab-comments .ambient-bg { filter: hue-rotate(78deg) saturate(1.1); }
+        body.tab-profile .ambient-bg { filter: hue-rotate(110deg) saturate(1.1); }
+        body.tab-about .ambient-bg { filter: hue-rotate(145deg) saturate(1.16); }
+        .ambient-bg { transition: filter 280ms ease; }
+
         @keyframes tabEnter {
             0% { opacity: 0; transform: translateY(10px) scale(0.995); filter: blur(3px); }
             100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
@@ -536,6 +609,49 @@
             display: flex;
             transition: transform 0.35s ease;
             will-change: transform;
+        }
+
+        .about-progress {
+            position: absolute;
+            top: 6px;
+            left: 8px;
+            right: 108px;
+            z-index: 4;
+            display: flex;
+            gap: 6px;
+        }
+
+        .about-progress-item {
+            flex: 1;
+            height: 3px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.22);
+            overflow: hidden;
+        }
+
+        .about-progress-fill {
+            width: 0%;
+            height: 100%;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.92);
+            transition: width 120ms linear;
+        }
+
+        .about-now-playing {
+            position: absolute;
+            left: 10px;
+            top: 14px;
+            z-index: 4;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            color: rgba(255,255,255,0.95);
+            background: rgba(0,0,0,0.46);
+            border: 1px solid rgba(255,255,255,0.24);
+            border-radius: 999px;
+            padding: 4px 10px;
+            backdrop-filter: blur(6px);
+            pointer-events: none;
         }
 
         .about-slide {
@@ -1987,6 +2103,110 @@
             border-radius: 4px;
             transition: width 0.5s ease;
         }
+
+        .book-reader {
+            margin: 14px 0 12px;
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            background: linear-gradient(145deg, rgba(10,132,255,0.09), rgba(191,90,242,0.08));
+            padding: 14px;
+        }
+
+        .book-reader-top {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .book-query {
+            flex: 1;
+            min-width: 0;
+            background: var(--surface);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            color: var(--text);
+            padding: 10px 12px;
+            font-size: 13px;
+        }
+
+        .book-search-btn {
+            padding: 9px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--glass-border);
+            background: var(--primary);
+            color: white;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .book-select {
+            width: 100%;
+            background: var(--surface);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            color: var(--text);
+            padding: 10px 12px;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+
+        .book-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            min-height: 16px;
+        }
+
+        .book-page {
+            min-height: 190px;
+            max-height: 270px;
+            overflow-y: auto;
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 12px;
+            background: rgba(0,0,0,0.2);
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .book-page.flip {
+            animation: pageFlip 320ms ease;
+            transform-origin: left center;
+        }
+
+        @keyframes pageFlip {
+            0% { opacity: 0.5; transform: rotateY(-9deg) translateX(-6px); }
+            100% { opacity: 1; transform: rotateY(0) translateX(0); }
+        }
+
+        .book-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 10px;
+            gap: 8px;
+        }
+
+        .book-btn {
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--glass-border);
+            background: var(--surface);
+            color: var(--text);
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .book-page-indicator {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            min-width: 70px;
+            text-align: center;
+        }
         .quick-filters {
             display: flex;
             gap: 8px;
@@ -2392,14 +2612,14 @@
             </nav>
 
             <!-- Lovewell Church Credit -->
-            <div style="margin-top: auto; padding: 15px; text-align: center; border-top: 1px solid var(--glass-border);">
+            <div class="lovewell-credit">
                 <a href="https://www.crossforall.com" target="_blank" rel="noopener noreferrer" title="Visit Cross For All">
                     <img src="data:image/png;base64,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" 
                          alt="Lovewell Church" 
                          class="lovewell-logo"
                          id="lovewellLogo">
                 </a>
-                <div style="font-size: 10px; color: var(--text-tertiary);">Credit To Cross Community Lovewell for more info check out the About us Or Click the logo thanks for your support!</div>
+                <div class="lovewell-credit-text">Credit To Cross Community Lovewell for more info check out the About us Or Click the logo thanks for your support!</div>
             </div>
 
             <div class="header-actions">
@@ -2423,6 +2643,24 @@
                     </div>
                     <div style="text-align: right; font-size: 12px; margin-top: 6px; opacity: 0.8;">
                         <span id="challengeProgress">0</span>/<span id="challengeGoal">2</span>
+                    </div>
+                </div>
+
+                <div class="book-reader">
+                    <div class="challenge-title" style="margin-bottom: 6px;">📚 Book Reader</div>
+                    <div class="book-reader-top">
+                        <input class="book-query" id="bookQuery" placeholder="Search books (faith, hope, prayer, etc)" value="faith">
+                        <button class="book-search-btn" onclick="searchBooks()">Find</button>
+                    </div>
+                    <select class="book-select" id="bookSelect" onchange="loadSelectedBook()">
+                        <option value="">Search to select a book...</option>
+                    </select>
+                    <div class="book-meta" id="bookMeta">Use AI-ranked search to load a full public-domain book.</div>
+                    <div class="book-page" id="bookPageText">Select a book to start reading.</div>
+                    <div class="book-controls">
+                        <button class="book-btn" onclick="prevBookPage()">◀ Prev</button>
+                        <div class="book-page-indicator" id="bookPageIndicator">Page 0/0</div>
+                        <button class="book-btn" onclick="nextBookPage()">Next ▶</button>
                     </div>
                 </div>
 
@@ -2790,6 +3028,11 @@
                     <div class="about-slider-wrap">
                         <button class="about-nav-btn prev" onclick="aboutPrev()" aria-label="Previous video">&#8249;</button>
                         <button class="about-nav-btn next" onclick="aboutNext()" aria-label="Next video">&#8250;</button>
+                        <div class="about-progress" id="aboutProgress">
+                            <div class="about-progress-item"><div class="about-progress-fill" id="aboutProgressFill0"></div></div>
+                            <div class="about-progress-item"><div class="about-progress-fill" id="aboutProgressFill1"></div></div>
+                        </div>
+                        <div class="about-now-playing" id="aboutNowPlaying">Slide 1/2 • Playing • Vol 100%</div>
                         <div class="about-volume-wrap" onclick="event.stopPropagation()">
                             <input id="aboutVolumeSlider" class="about-volume-slider" type="range" min="0" max="1" step="0.01" value="1" aria-label="Video volume" oninput="setAboutVolume(this.value)" onchange="setAboutVolume(this.value)">
                         </div>
@@ -3211,6 +3454,8 @@
         let aboutSyncTimer = null;
         let aboutVideoErrorCount = 0;
         let aboutVolume = 1;
+        let aboutProgressTimer = null;
+        let bookState = { results: [], currentBook: null, pages: [], pageIndex: 0 };
 
         // Permanent Timer State
         let sessionStartTime = null;
@@ -3241,14 +3486,25 @@
             
             // Initialize new features
             initDailyChallenge();
+            initBookReader();
             loadVerseOfDay();
             renderRecHistory();
             updateOnlineUsers();
+            updateTabThemeClass(currentTab);
             switchCommentsView('verse');
             setupAboutSliderGestures();
             initAboutVideoEvents();
             initAboutVolumeControl();
             setAboutSlide(aboutSlideIndex);
+            setupGlobalShortcuts();
+            const verseContainer = document.querySelector('.verse-container');
+            if (verseContainer) {
+                verseContainer.addEventListener('dblclick', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleLike();
+                });
+            }
         }
 
         function setupTextarea(id) {
@@ -3534,6 +3790,7 @@
         function switchTab(tab, btn = null) {
             const prevTab = currentTab;
             currentTab = tab;
+            updateTabThemeClass(tab);
             
             document.querySelectorAll('.tab-view').forEach(v => {
                 v.classList.remove('active');
@@ -3562,8 +3819,14 @@
             }
             if (tab === 'profile') loadProfileStats();
             if (tab === 'recommendations') loadRecommendations();
-            if (prevTab === 'about' && tab !== 'about') pauseAboutPlayback();
-            if (tab === 'about') setAboutSlide(aboutSlideIndex);
+            if (prevTab === 'about' && tab !== 'about') {
+                pauseAboutPlayback();
+                stopAboutProgressTicker();
+            }
+            if (tab === 'about') {
+                setAboutSlide(aboutSlideIndex);
+                startAboutProgressTicker();
+            }
         }
 
         // Verse Handling
@@ -4577,6 +4840,141 @@
             }
         }
 
+        async function initBookReader() {
+            const q = document.getElementById('bookQuery');
+            if (q) {
+                q.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') searchBooks();
+                });
+            }
+            await searchBooks(true);
+        }
+
+        async function searchBooks(silent = false) {
+            const queryEl = document.getElementById('bookQuery');
+            const selectEl = document.getElementById('bookSelect');
+            const metaEl = document.getElementById('bookMeta');
+            if (!queryEl || !selectEl) return;
+
+            const q = (queryEl.value || 'faith').trim();
+            if (!silent && metaEl) metaEl.textContent = 'Searching books...';
+
+            try {
+                const res = await fetch(`/api/books/search?q=${encodeURIComponent(q)}`);
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    if (metaEl) metaEl.textContent = 'Book search failed.';
+                    return;
+                }
+
+                bookState.results = Array.isArray(data.books) ? data.books : [];
+                selectEl.innerHTML = '';
+                if (!bookState.results.length) {
+                    selectEl.innerHTML = '<option value="">No books found</option>';
+                    if (metaEl) metaEl.textContent = 'No books found for that query.';
+                    return;
+                }
+
+                bookState.results.forEach((b, idx) => {
+                    const opt = document.createElement('option');
+                    opt.value = String(b.id);
+                    opt.textContent = `${b.title} — ${b.author}`;
+                    if (idx === 0) opt.selected = true;
+                    selectEl.appendChild(opt);
+                });
+                if (metaEl) metaEl.textContent = `${bookState.results.length} AI-ranked books found.`;
+                await loadSelectedBook();
+            } catch (e) {
+                if (metaEl) metaEl.textContent = 'Network error while searching books.';
+            }
+        }
+
+        async function loadSelectedBook() {
+            const selectEl = document.getElementById('bookSelect');
+            const pageEl = document.getElementById('bookPageText');
+            const metaEl = document.getElementById('bookMeta');
+            if (!selectEl || !pageEl) return;
+
+            const id = selectEl.value;
+            if (!id) return;
+            pageEl.textContent = 'Loading full book...';
+            if (metaEl) metaEl.textContent = 'Fetching full book text from online source...';
+
+            try {
+                const res = await fetch(`/api/books/content/${encodeURIComponent(id)}`);
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    pageEl.textContent = 'Could not load this book.';
+                    if (metaEl) metaEl.textContent = data.message || 'Book content unavailable.';
+                    return;
+                }
+
+                bookState.currentBook = data;
+                bookState.pages = paginateBookText(data.text || '');
+                bookState.pageIndex = 0;
+                const pageCount = bookState.pages.length;
+                if (metaEl) {
+                    metaEl.textContent = `${data.title} — ${data.author} • ${pageCount} pages`;
+                }
+                renderBookPage(true);
+            } catch (e) {
+                pageEl.textContent = 'Error loading book.';
+                if (metaEl) metaEl.textContent = 'Failed to fetch book text.';
+            }
+        }
+
+        function paginateBookText(text) {
+            const src = String(text || '').trim();
+            if (!src) return ['No content available.'];
+            const paragraphs = src.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+            const pages = [];
+            const maxChars = 1500;
+            let current = '';
+            for (const p of paragraphs) {
+                const next = current ? `${current}\n\n${p}` : p;
+                if (next.length > maxChars && current) {
+                    pages.push(current);
+                    current = p;
+                } else {
+                    current = next;
+                }
+            }
+            if (current) pages.push(current);
+            return pages.length ? pages : [src.slice(0, maxChars)];
+        }
+
+        function renderBookPage(withFlip = false) {
+            const pageEl = document.getElementById('bookPageText');
+            const pageInfo = document.getElementById('bookPageIndicator');
+            if (!pageEl || !pageInfo) return;
+
+            const total = bookState.pages.length;
+            const idx = bookState.pageIndex;
+            const text = total ? (bookState.pages[idx] || '') : 'Select a book to start reading.';
+            pageEl.textContent = text;
+            pageInfo.textContent = `Page ${total ? idx + 1 : 0}/${total}`;
+
+            if (withFlip) {
+                pageEl.classList.remove('flip');
+                void pageEl.offsetWidth;
+                pageEl.classList.add('flip');
+            }
+        }
+
+        function prevBookPage() {
+            if (!bookState.pages.length) return;
+            if (bookState.pageIndex <= 0) return;
+            bookState.pageIndex -= 1;
+            renderBookPage(true);
+        }
+
+        function nextBookPage() {
+            if (!bookState.pages.length) return;
+            if (bookState.pageIndex >= bookState.pages.length - 1) return;
+            bookState.pageIndex += 1;
+            renderBookPage(true);
+        }
+
         // Quick Filters for Discover
         let currentFilter = 'all';
         function filterDiscover(type) {
@@ -4922,6 +5320,8 @@
             aboutSlideIndex = ((index % total) + total) % total;
             updateAboutDots();
             track.style.transform = `translateX(-${aboutSlideIndex * 100}%)`;
+            updateAboutProgressBars();
+            updateAboutNowPlaying();
             if (aboutSyncTimer) clearTimeout(aboutSyncTimer);
             aboutSyncTimer = setTimeout(() => {
                 syncAboutVideoPlayback();
@@ -4959,6 +5359,8 @@
         function pauseAboutPlayback() {
             getAboutVideos().forEach(v => { if (!v.paused) v.pause(); });
             updateAboutPausedOverlay();
+            updateAboutProgressBars();
+            updateAboutNowPlaying();
         }
 
         function toggleAboutPlayback() {
@@ -4975,6 +5377,7 @@
                 activeVideo.pause();
             }
             updateAboutPausedOverlay();
+            updateAboutNowPlaying();
         }
 
         function updateAboutPausedOverlay() {
@@ -4983,6 +5386,7 @@
                 const frame = document.getElementById(`aboutFrame${idx}`);
                 if (frame) frame.classList.toggle('paused', !!video.paused);
             });
+            updateAboutNowPlaying();
         }
 
         function initAboutVideoEvents() {
@@ -4993,6 +5397,8 @@
                 v.addEventListener('play', updateAboutPausedOverlay);
                 v.addEventListener('pause', updateAboutPausedOverlay);
                 v.addEventListener('ended', updateAboutPausedOverlay);
+                v.addEventListener('timeupdate', updateAboutProgressBars);
+                v.addEventListener('loadedmetadata', updateAboutProgressBars);
                 v.addEventListener('error', () => {
                     const frame = document.getElementById(`aboutFrame${idx}`);
                     if (!frame) return;
@@ -5009,6 +5415,8 @@
                 });
             });
             updateAboutPausedOverlay();
+            updateAboutProgressBars();
+            updateAboutNowPlaying();
         }
 
         function getAboutVideos() {
@@ -5032,11 +5440,81 @@
             aboutVolume = n;
             getAboutVideos().forEach(v => { v.volume = aboutVolume; });
             localStorage.setItem('aboutVideoVolume', String(aboutVolume));
+            updateAboutNowPlaying();
         }
 
         function updateAboutDots() {
             const dots = Array.from(document.querySelectorAll('#aboutDots .about-dot'));
             dots.forEach((dot, idx) => dot.classList.toggle('active', idx === aboutSlideIndex));
+        }
+
+        function updateAboutProgressBars() {
+            const videos = getAboutVideos();
+            videos.forEach((v, idx) => {
+                const fill = document.getElementById(`aboutProgressFill${idx}`);
+                if (!fill) return;
+                if (idx < aboutSlideIndex) {
+                    fill.style.width = '100%';
+                    return;
+                }
+                if (idx > aboutSlideIndex) {
+                    fill.style.width = '0%';
+                    return;
+                }
+                const duration = Number(v.duration || 0);
+                const current = Number(v.currentTime || 0);
+                const pct = duration > 0 ? Math.max(0, Math.min(100, (current / duration) * 100)) : (v.paused ? 0 : 5);
+                fill.style.width = `${pct}%`;
+            });
+        }
+
+        function updateAboutNowPlaying() {
+            const label = document.getElementById('aboutNowPlaying');
+            const videos = getAboutVideos();
+            const total = videos.length || 2;
+            const active = videos[aboutSlideIndex];
+            const state = active && !active.paused ? 'Playing' : 'Paused';
+            const volPct = Math.round((aboutVolume || 0) * 100);
+            if (label) {
+                label.textContent = `Slide ${aboutSlideIndex + 1}/${total} • ${state} • Vol ${volPct}%`;
+            }
+        }
+
+        function startAboutProgressTicker() {
+            if (aboutProgressTimer) return;
+            aboutProgressTimer = setInterval(updateAboutProgressBars, 120);
+        }
+
+        function stopAboutProgressTicker() {
+            if (!aboutProgressTimer) return;
+            clearInterval(aboutProgressTimer);
+            aboutProgressTimer = null;
+        }
+
+        function updateTabThemeClass(tab) {
+            const classes = ['tab-discover', 'tab-recommendations', 'tab-library', 'tab-comments', 'tab-profile', 'tab-about'];
+            classes.forEach(c => document.body.classList.remove(c));
+            document.body.classList.add(`tab-${tab}`);
+        }
+
+        function setupGlobalShortcuts() {
+            document.addEventListener('keydown', (e) => {
+                if (currentTab !== 'about') return;
+                const activeEl = document.activeElement;
+                const tag = activeEl && activeEl.tagName ? activeEl.tagName.toLowerCase() : '';
+                if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    aboutPrev();
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    aboutNext();
+                } else if (e.key === ' ') {
+                    e.preventDefault();
+                    toggleAboutPlayback();
+                }
+            });
         }
 
         function setupAboutSliderGestures() {
