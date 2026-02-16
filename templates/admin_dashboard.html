@@ -1,0 +1,1863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --primary: #667eea;
+            --success: #48bb78;
+            --danger: #f56565;
+            --warning: #ed8936;
+            --bg: #0f0f1e;
+            --surface: rgba(255,255,255,0.03);
+            --text: #fff;
+            --text-secondary: #888;
+            --border: rgba(255,255,255,0.1);
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        
+        /* Mobile-first layout */
+        .mobile-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px;
+            background: rgba(255,255,255,0.02);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .mobile-menu-btn {
+            background: none;
+            border: none;
+            color: var(--text);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 5px;
+        }
+        
+        .logo {
+            font-size: 1.3rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: -280px;
+            width: 280px;
+            height: 100vh;
+            background: var(--bg);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            z-index: 200;
+            transition: left 0.3s ease;
+        }
+        
+        .sidebar.active { left: 0; }
+        
+        .sidebar-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            z-index: 150;
+        }
+        
+        .sidebar-overlay.active { display: block; }
+        
+        .nav-item {
+            padding: 14px 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-bottom: 5px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1rem;
+        }
+        
+        .nav-item:hover, .nav-item.active { background: rgba(102,126,234,0.2); }
+        .nav-item.logout { margin-top: auto; color: #ff6b6b; }
+        .nav-item.hidden { display: none !important; }
+        
+        .main-content {
+            padding: 15px;
+            max-width: 100%;
+        }
+        
+        .header {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .header h1 { font-size: 1.5rem; }
+        
+        .header-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .role-badge {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .role-owner { background: #ffd700; color: #000; }
+        .role-co_owner { background: #ff6b6b; color: #fff; }
+        .role-mod { background: #4ecdc4; color: #000; }
+        .role-host { background: #95e1d3; color: #000; }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px;
+        }
+        
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-bottom: 6px;
+        }
+        
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+        
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 18px;
+            overflow-x: auto;
+        }
+        
+        .panel-header {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        
+        .search-box {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            padding: 12px 15px;
+            border-radius: 8px;
+            color: var(--text);
+            width: 100%;
+            font-size: 15px;
+        }
+        
+        table {
+            width: 100%;
+            min-width: 600px;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        
+        th, td {
+            text-align: left;
+            padding: 12px 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        th { 
+            color: var(--text-secondary); 
+            font-weight: 500;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+        
+        .user-badge {
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        
+        .badge-user { background: #333; color: #fff; }
+        .badge-host { background: #95e1d3; color: #000; }
+        .badge-mod { background: #4ecdc4; color: #000; }
+        .badge-co_owner { background: #ff6b6b; color: #fff; }
+        .badge-owner { background: #ffd700; color: #000; }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+        }
+        
+        .status-active { background: rgba(72,187,120,0.2); color: #48bb78; }
+        .status-banned { background: rgba(245,101,101,0.2); color: #f56565; }
+        .status-restricted { background: rgba(237,137,54,0.2); color: #ed8936; }
+        
+        .btn {
+            padding: 8px 14px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-right: 4px;
+            margin-bottom: 4px;
+        }
+        
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-warning { background: var(--warning); color: white; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .hidden { display: none !important; }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 30px;
+            color: var(--text-secondary);
+        }
+        
+        .refresh-btn {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: white;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 15px;
+            padding: 25px;
+            width: 100%;
+            max-width: 400px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal h3 { margin-bottom: 15px; }
+        .modal-input, .modal-select {
+            width: 100%;
+            padding: 12px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: white;
+            margin: 10px 0;
+            font-size: 15px;
+        }
+        .duration-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin: 15px 0;
+        }
+        .duration-btn {
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .duration-btn:hover, .duration-btn.selected {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+        
+        .comment-card {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 12px;
+        }
+        .settings-meta {
+            margin-bottom: 15px;
+        }
+        .settings-meta:last-of-type {
+            margin-bottom: 20px;
+        }
+        .interval-setting-card {
+            margin-bottom: 20px;
+            padding: 14px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: rgba(0,0,0,0.2);
+        }
+        .interval-setting-title {
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .interval-setting-help {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+        .interval-setting-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .interval-select {
+            min-width: 220px;
+            padding: 10px 12px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 0.9rem;
+        }
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--success);
+            color: white;
+            padding: 14px 22px;
+            border-radius: 10px;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+            font-size: 0.95rem;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @media (min-width: 768px) {
+            .mobile-header { display: none; }
+            .sidebar {
+                position: fixed;
+                left: 0;
+                width: 260px;
+                height: 100vh;
+            }
+            .sidebar-overlay { display: none !important; }
+            .main-content {
+                margin-left: 260px;
+                padding: 30px;
+            }
+            .header { flex-direction: row; align-items: center; }
+            .stats-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+            .panel-header { flex-direction: row; justify-content: space-between; }
+            .search-box { width: 300px; }
+        }
+        
+        /* ===== ENHANCED FEATURES CSS ===== */
+        
+        /* Stats Grid Enhanced */
+        .stat-icon {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+        }
+        
+        .stat-change {
+            font-size: 0.75rem;
+            margin-top: 4px;
+        }
+        
+        .stat-change.up { color: var(--success); }
+        .stat-change.down { color: var(--danger); }
+        
+        /* Quick Actions */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .quick-action {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .quick-action:hover {
+            background: var(--surface-hover);
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+        
+        .quick-action-icon {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+        }
+        
+        /* Activity Feed */
+        .activity-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .activity-item {
+            display: flex;
+            gap: 12px;
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .activity-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+        
+        .activity-icon.ban { background: rgba(245,101,101,0.2); }
+        .activity-icon.unban { background: rgba(72,187,120,0.2); }
+        .activity-icon.restrict { background: rgba(237,137,54,0.2); }
+        
+        .activity-content {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .activity-text {
+            font-size: 0.95rem;
+            margin-bottom: 4px;
+        }
+        
+        .activity-details {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            word-break: break-word;
+        }
+        
+        .activity-time {
+            font-size: 0.75rem;
+            color: #666;
+        }
+        
+        /* User Cell with Avatar */
+        .user-cell {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .user-info {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .user-name {
+            font-weight: 600;
+        }
+        
+        .user-email {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+        
+        /* Filter Bar */
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-select {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            padding: 12px 15px;
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 15px;
+            min-width: 150px;
+        }
+        
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+        
+        .page-btn {
+            padding: 8px 12px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        
+        .page-btn:hover, .page-btn.active {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+        }
+        
+        .tab {
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        .tab:hover, .tab.active {
+            background: var(--surface);
+            color: var(--primary);
+        }
+        
+        /* Loading Spinner */
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--surface);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* User Detail Modal */
+        .user-detail-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .user-detail-avatar {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .user-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin: 20px 0;
+        }
+        
+        .user-stat {
+            text-align: center;
+            padding: 12px;
+            background: var(--surface);
+            border-radius: 8px;
+        }
+        
+        .user-stat-value {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        
+        /* Modal Enhancements */
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .btn-info {
+            background: #4299e1;
+            color: white;
+        }
+        
+        .btn-sm {
+            padding: 6px 10px;
+            font-size: 0.75rem;
+        }
+        
+        /* Toast Types */
+        .toast.error {
+            background: var(--danger);
+        }
+        
+        /* Nav Badge */
+        .nav-badge {
+            margin-left: auto;
+            background: var(--danger);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+    <div class="mobile-header">
+        <button class="mobile-menu-btn" onclick="toggleMenu()">☰</button>
+        <div class="logo">⚡ Admin</div>
+        <div style="width: 40px;"></div>
+    </div>
+    
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMenu()"></div>
+    
+    <div class="sidebar" id="sidebar">
+        <div class="logo" style="margin-bottom: 30px;">⚡ Admin Panel</div>
+        
+        <div class="nav-item active" onclick="showSection('dashboard'); toggleMenu();" data-section="dashboard">
+            <span>📊</span> Dashboard
+        </div>
+        <div class="nav-item" onclick="showSection('users'); toggleMenu();" data-section="users">
+            <span>👥</span> Users
+        </div>
+        <div class="nav-item" onclick="showSection('restrictions'); toggleMenu();" data-section="restrictions">
+            <span>🚫</span> Restrictions
+        </div>
+        <div class="nav-item" onclick="showSection('bans'); toggleMenu();" data-section="bans">
+            <span>🚫</span> Banned Users
+        </div>
+        <div class="nav-item perm-delete-comments hidden" onclick="showSection('comments'); toggleMenu();" data-section="comments">
+            <span>💬</span> Comments
+        </div>
+        <div class="nav-item" onclick="showSection('audit'); toggleMenu();" data-section="audit">
+            <span>📋</span> Audit Logs
+        </div>
+        <div class="nav-item perm-settings hidden" onclick="showSection('settings'); toggleMenu();" data-section="settings">
+            <span>⚙️</span> Settings
+        </div>
+        
+        <div class="nav-item logout" onclick="logout()">
+            <span>🚪</span> Logout
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="header">
+            <h1 id="pageTitle">Dashboard</h1>
+            <div class="header-actions">
+                <button class="refresh-btn" onclick="loadAllData()">🔄 Refresh</button>
+                <a href="/" class="back-btn">🏠 Back to Site</a>
+                <span id="roleBadge" class="role-badge">...</span>
+            </div>
+        </div>
+
+        <!-- Dashboard Section -->
+        <div id="dashboard-section">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-label">Total Users</div>
+                    <div class="stat-value" id="statUsers">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🔨</div>
+                    <div class="stat-label">Active Bans</div>
+                    <div class="stat-value" id="statBans" style="color:#ff6b6b;">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🚫</div>
+                    <div class="stat-label">Restricted</div>
+                    <div class="stat-value" id="statRestricted" style="color:#ed8936;">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">💬</div>
+                    <div class="stat-label">Comments</div>
+                    <div class="stat-value" id="statComments">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">📖</div>
+                    <div class="stat-label">Total Verses</div>
+                    <div class="stat-value" id="statVerses">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">⚡</div>
+                    <div class="stat-label">Your Role</div>
+                    <div class="stat-value" style="font-size:1rem;text-transform:uppercase;margin-top:10px;" id="statRole">-</div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="panel">
+                <div class="panel-title">⚡ Quick Actions</div>
+                <div class="quick-actions">
+                    <div class="quick-action" onclick="showSection('users')">
+                        <div class="quick-action-icon">👥</div>
+                        <div style="font-size: 0.85rem; font-weight: 500;">Manage Users</div>
+                    </div>
+                    <div class="quick-action" onclick="showSection('restrictions')">
+                        <div class="quick-action-icon">🚫</div>
+                        <div style="font-size: 0.85rem; font-weight: 500;">Restrictions</div>
+                    </div>
+                    <div class="quick-action" onclick="showSection('bans')">
+                        <div class="quick-action-icon">🔨</div>
+                        <div style="font-size: 0.85rem; font-weight: 500;">Ban User</div>
+                    </div>
+                    <div class="quick-action" onclick="exportData('users')">
+                        <div class="quick-action-icon">📊</div>
+                        <div style="font-size: 0.85rem; font-weight: 500;">Export Data</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">📋 Recent Activity</div>
+                    <button class="btn btn-sm btn-secondary" onclick="showSection('audit')">View All</button>
+                </div>
+                <div class="activity-list" id="recentActivity">
+                    <div class="loading"><div class="spinner"></div>Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Users Section -->
+        <div id="users-section" class="hidden">
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">👥 User Management</div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-primary" onclick="openAddRestrictionModal()">➕ Add Restriction</button>
+                        <button class="btn btn-success" onclick="exportData('users')">📥 Export CSV</button>
+                    </div>
+                </div>
+                
+                <!-- Filters -->
+                <div class="filter-bar">
+                    <input type="text" class="search-box" id="userSearch" placeholder="🔍 Search by name or email..." onkeyup="filterUsers()">
+                    <select class="filter-select" id="roleFilter" onchange="filterUsers()">
+                        <option value="">All Roles</option>
+                        <option value="user">User</option>
+                        <option value="host">Host</option>
+                        <option value="mod">Mod</option>
+                        <option value="co_owner">Co-Owner</option>
+                        <option value="owner">Owner</option>
+                    </select>
+                    <select class="filter-select" id="statusFilter" onchange="filterUsers()">
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="banned">Banned</option>
+                    </select>
+                </div>
+                
+                <div id="usersContent"><div class="loading"><div class="spinner"></div>Loading users...</div></div>
+                <div class="pagination" id="userPagination"></div>
+            </div>
+        </div>
+
+        <!-- Restrictions Section -->
+        <div id="restrictions-section" class="hidden">
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">🚫 Comment Restrictions</div>
+                    <button class="btn btn-success" onclick="exportData('restrictions')">📥 Export</button>
+                </div>
+                <div class="filter-bar">
+                    <input type="text" class="search-box" id="restrictionSearch" placeholder="🔍 Search restricted users..." onkeyup="filterRestrictions()">
+                </div>
+                <div id="restrictionsContent"><div class="loading"><div class="spinner"></div>Loading restrictions...</div></div>
+            </div>
+        </div>
+
+        <!-- Bans Section -->
+        <div id="bans-section" class="hidden">
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">🔨 Banned Users</div>
+                    <button class="btn btn-success" onclick="exportData('bans')">📥 Export CSV</button>
+                </div>
+                <div class="filter-bar">
+                    <input type="text" class="search-box" id="banSearch" placeholder="🔍 Search banned users..." onkeyup="filterBans()">
+                    <select class="filter-select" id="banTypeFilter" onchange="filterBans()">
+                        <option value="">All Bans</option>
+                        <option value="temporary">Temporary</option>
+                        <option value="permanent">Permanent</option>
+                    </select>
+                </div>
+                <div id="bansContent"><div class="loading"><div class="spinner"></div>Loading bans...</div></div>
+            </div>
+        </div>
+
+        <!-- Comments Section -->
+        <div id="comments-section" class="hidden">
+            <div class="panel">
+                <div class="panel-title">💬 Comment Moderation</div>
+                <div class="tabs">
+                    <div class="tab active" onclick="switchCommentTab('verse', this)">Verse Comments</div>
+                    <div class="tab" onclick="switchCommentTab('community', this)">Community Chat</div>
+                </div>
+                <div id="commentsContent"><div class="loading"><div class="spinner"></div>Loading comments...</div></div>
+            </div>
+        </div>
+
+        <!-- Audit Section -->
+        <div id="audit-section" class="hidden">
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">📋 Audit Logs</div>
+                    <button class="btn btn-success" onclick="exportData('audit')">📥 Export CSV</button>
+                </div>
+                <div class="filter-bar">
+                    <input type="date" class="filter-select" id="auditDateFrom" onchange="filterAudit()">
+                    <input type="date" class="filter-select" id="auditDateTo" onchange="filterAudit()">
+                    <select class="filter-select" id="auditActionFilter" onchange="filterAudit()">
+                        <option value="">All Actions</option>
+                        <option value="BAN">Ban</option>
+                        <option value="UNBAN">Unban</option>
+                        <option value="RESTRICT">Restrict</option>
+                        <option value="DELETE">Delete</option>
+                    </select>
+                </div>
+                <div id="auditContent"><div class="loading"><div class="spinner"></div>Loading logs...</div></div>
+                <div class="pagination" id="auditPagination"></div>
+            </div>
+        </div>
+
+        <!-- Settings Section -->
+        <div id="settings-section" class="hidden">
+            <div class="panel">
+                <div class="panel-title" style="margin-bottom:18px;">⚙️ Settings (Owner Only)</div>
+                <div id="settingsContent"><div class="loading">Loading...</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ban Modal -->
+    <div class="modal-overlay" id="banModal">
+        <div class="modal">
+            <h3>🚫 Ban User</h3>
+            <p style="color:#888;margin:10px 0;font-size:0.9rem;">Select ban duration:</p>
+            <div class="duration-grid">
+                <button class="duration-btn" data-duration="30m" onclick="selectDuration('30m')">30m</button>
+                <button class="duration-btn" data-duration="1h" onclick="selectDuration('1h')">1h</button>
+                <button class="duration-btn" data-duration="2h" onclick="selectDuration('2h')">2h</button>
+                <button class="duration-btn" data-duration="6h" onclick="selectDuration('6h')">6h</button>
+                <button class="duration-btn" data-duration="12h" onclick="selectDuration('12h')">12h</button>
+                <button class="duration-btn" data-duration="24h" onclick="selectDuration('24h')">24h</button>
+                <button class="duration-btn" data-duration="1d" onclick="selectDuration('1d')">1d</button>
+                <button class="duration-btn" data-duration="7d" onclick="selectDuration('7d')">7d</button>
+                <button class="duration-btn" data-duration="30d" onclick="selectDuration('30d')">30d</button>
+                <button class="duration-btn selected" data-duration="permanent" onclick="selectDuration('permanent')">∞</button>
+            </div>
+            <input type="text" class="modal-input" id="banReason" placeholder="Reason for ban...">
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn" onclick="closeBanModal()" style="background:#333;color:#fff;">Cancel</button>
+                <button class="btn btn-danger" onclick="confirmBan()">Ban User</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Restriction Modal -->
+    <div class="modal-overlay" id="addRestrictionModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">🚫 Add Restriction</h3>
+                <button class="modal-close" onclick="closeAddRestrictionModal()">×</button>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; color: var(--text-secondary);">User Email</label>
+                <input type="email" class="modal-input" id="restrictionUserEmail" placeholder="user@example.com">
+            </div>
+            <p style="color:#888;margin:10px 0;font-size:0.9rem;">Duration:</p>
+            <div class="duration-grid">
+                <button class="duration-btn" data-hours="1" onclick="selectNewRestrictHours(1)">1h</button>
+                <button class="duration-btn" data-hours="6" onclick="selectNewRestrictHours(6)">6h</button>
+                <button class="duration-btn selected" data-hours="24" onclick="selectNewRestrictHours(24)">24h</button>
+                <button class="duration-btn" data-hours="72" onclick="selectNewRestrictHours(72)">3d</button>
+            </div>
+            <input type="text" class="modal-input" id="newRestrictReason" placeholder="Reason for restriction...">
+            <div class="modal-footer">
+                <button class="btn" onclick="closeAddRestrictionModal()" style="background:#333;color:#fff;">Cancel</button>
+                <button class="btn btn-warning" onclick="addNewRestriction()">Add Restriction</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Detail Modal -->
+    <div class="modal-overlay" id="userDetailModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">👤 User Details</h3>
+                <button class="modal-close" onclick="closeUserDetailModal()">×</button>
+            </div>
+            <div class="user-detail-header">
+                <div class="user-detail-avatar" id="detailAvatar">U</div>
+                <div>
+                    <h3 id="detailName" style="margin-bottom: 4px;">User Name</h3>
+                    <p id="detailEmail" style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 8px;">user@example.com</p>
+                    <span class="user-badge" id="detailRole">user</span>
+                </div>
+            </div>
+            <div class="user-stats-grid">
+                <div class="user-stat">
+                    <div class="user-stat-value" id="detailLikes">0</div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px;">Likes</div>
+                </div>
+                <div class="user-stat">
+                    <div class="user-stat-value" id="detailSaves">0</div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px;">Saves</div>
+                </div>
+                <div class="user-stat">
+                    <div class="user-stat-value" id="detailComments">0</div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px;">Comments</div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;">
+                <button class="btn btn-warning" id="detailRestrictBtn" onclick="restrictDetailUser()">🚫 Restrict</button>
+                <button class="btn btn-danger" id="detailBanBtn" onclick="banDetailUser()">🔨 Ban</button>
+                <button class="btn btn-primary" onclick="changeDetailRole()">👑 Change Role</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restrict Modal -->
+    <div class="modal-overlay" id="restrictModal">
+        <div class="modal">
+            <h3>🚫 Restrict Comments</h3>
+            <p style="color:#888;margin:10px 0;font-size:0.9rem;">Restrict user from commenting for:</p>
+            <div class="duration-grid">
+                <button class="duration-btn" data-hours="1" onclick="selectRestrictHours(1)">1h</button>
+                <button class="duration-btn" data-hours="2" onclick="selectRestrictHours(2)">2h</button>
+                <button class="duration-btn" data-hours="4" onclick="selectRestrictHours(4)">4h</button>
+                <button class="duration-btn" data-hours="6" onclick="selectRestrictHours(6)">6h</button>
+                <button class="duration-btn" data-hours="12" onclick="selectRestrictHours(12)">12h</button>
+                <button class="duration-btn selected" data-hours="24" onclick="selectRestrictHours(24)">24h</button>
+            </div>
+            <input type="text" class="modal-input" id="restrictReason" placeholder="Reason for restriction... (e.g., Spam, Harassment)">
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn" onclick="closeRestrictModal()" style="background:#333;color:#fff;">Cancel</button>
+                <button class="btn btn-warning" onclick="confirmRestrict()">Restrict User</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentRole = null;
+        let permissions = [];
+        let allUsers = [];
+        let allRestrictions = [];
+        let allBans = [];
+        let allAuditLogs = [];
+        let banUserId = null;
+        let restrictUserId = null;
+        let selectedDuration = 'permanent';
+        let selectedHours = 24;
+
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+            document.getElementById('sidebarOverlay').classList.toggle('active');
+        }
+
+        async function loadPermissions() {
+            try {
+                const res = await fetch('/admin/api/permissions');
+                const data = await res.json();
+                permissions = data.permissions || [];
+                
+                // Show/hide menu items based on permissions
+                if (data.can_access_settings) {
+                    document.querySelectorAll('.perm-settings').forEach(el => el.classList.remove('hidden'));
+                }
+                if (permissions.includes('delete_comments')) {
+                    document.querySelectorAll('.perm-delete-comments').forEach(el => el.classList.remove('hidden'));
+                }
+            } catch (err) {
+                console.error('Failed to load permissions:', err);
+            }
+        }
+
+        async function loadAllData() {
+            showToast('Refreshing...');
+            await Promise.all([
+                loadStats(),
+                loadUsers(),
+                loadRestrictions(),
+                loadBans(),
+                loadComments(),
+                loadRecentActivity()
+            ]);
+            showToast('Data refreshed!');
+        }
+
+        async function loadStats() {
+            try {
+                const res = await fetch('/admin/api/stats');
+                const data = await res.json();
+                
+                document.getElementById('statUsers').textContent = data.users ?? 0;
+                document.getElementById('statBans').textContent = data.bans ?? 0;
+                document.getElementById('statRestricted').textContent = data.restricted ?? 0;
+                document.getElementById('statComments').textContent = data.comments ?? 0;
+                document.getElementById('statVerses').textContent = data.verses ?? 0;
+                document.getElementById('statRole').textContent = data.role ?? '-';
+                
+                currentRole = data.role;
+                
+                const badge = document.getElementById('roleBadge');
+                badge.textContent = data.role ?? '-';
+                badge.className = 'role-badge role-' + data.role;
+            } catch (err) {
+                console.error('Stats error:', err);
+            }
+        }
+
+        async function loadUsers() {
+            const container = document.getElementById('usersContent');
+            try {
+                const q = (document.getElementById('userSearch')?.value || '').trim();
+                const role = (document.getElementById('roleFilter')?.value || '').trim();
+                const status = (document.getElementById('statusFilter')?.value || '').trim();
+                const params = new URLSearchParams();
+                if (q) params.set('q', q);
+                if (role) params.set('role', role);
+                if (status) params.set('status', status);
+                const url = params.toString() ? `/admin/api/users?${params.toString()}` : '/admin/api/users';
+
+                const res = await fetch(url);
+                const data = await res.json();
+                
+                if (data.error) {
+                    container.innerHTML = '<div class="error-box">' + data.error + '</div>';
+                    return;
+                }
+                
+                allUsers = data;
+                renderUsers(data);
+            } catch (err) {
+                container.innerHTML = '<div class="error-box">Failed to load users</div>';
+            }
+        }
+
+        function renderUsers(users) {
+            const container = document.getElementById('usersContent');
+            if (!users || users.length === 0) {
+                container.innerHTML = '<div class="empty-state">No users found</div>';
+                return;
+            }
+            
+            let html = '<table><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+            users.forEach(u => {
+                let statusHtml = '<span class="status-badge status-active">✅ Active</span>';
+                if (u.is_banned) statusHtml = '<span class="status-badge status-banned">🚫 Banned</span>';
+                
+                let actions = '';
+                if (permissions.includes('restrict_comments')) {
+                    actions += `<button class="btn btn-warning" onclick="openRestrictModal(${u.id})">🚫 Restrict</button>`;
+                }
+                if (permissions.includes('ban')) {
+                    if (u.is_banned) {
+                        actions += `<button class="btn btn-success" onclick="unbanUser(${u.id})">Unban</button>`;
+                    } else {
+                        actions += `<button class="btn btn-danger" onclick="openBanModal(${u.id})">Ban</button>`;
+                    }
+                }
+                if (permissions.includes('change_roles')) {
+                    actions += `<button class="btn btn-primary" onclick="changeRole(${u.id}, '${u.role}')">Role</button>`;
+                }
+                
+                html += `<tr>
+                    <td>${escapeHtml(u.name)}<br><small style="color:#888">${escapeHtml(u.email)}</small></td>
+                    <td><span class="user-badge badge-${u.role}">${u.role}</span></td>
+                    <td>${statusHtml}</td>
+                    <td>${actions}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function searchUsers(query) {
+            filterUsers();
+        }
+
+        function filterUsers() {
+            loadUsers();
+        }
+
+        async function loadRestrictions() {
+            if (!permissions.includes('restrict_comments')) return;
+            
+            const container = document.getElementById('restrictionsContent');
+            try {
+                const res = await fetch('/admin/api/restrictions');
+                const data = await res.json();
+                
+                if (data.error) {
+                    container.innerHTML = '<div class="error-box">' + data.error + '</div>';
+                    return;
+                }
+
+                allRestrictions = data || [];
+                
+                if (!data || data.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No active restrictions</div>';
+                    return;
+                }
+                
+                let html = '<table><thead><tr><th>User</th><th>Reason</th><th>Expires</th><th>Actions</th></tr></thead><tbody>';
+                data.forEach(r => {
+                    const expires = r.expires_at ? new Date(r.expires_at).toLocaleString() : 'Unknown';
+                    html += `<tr>
+                        <td>${escapeHtml(r.user_name)}<br><small style="color:#888">${escapeHtml(r.user_email)}</small></td>
+                        <td>${escapeHtml(r.reason)}</td>
+                        <td>${expires}</td>
+                        <td><button class="btn btn-success" onclick="removeRestriction(${r.user_id})">Remove</button></td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (err) {
+                container.innerHTML = '<div class="error-box">Failed to load restrictions</div>';
+            }
+        }
+
+        async function loadBans() {
+            const container = document.getElementById('bansContent');
+            try {
+                const res = await fetch('/admin/api/bans');
+                const data = await res.json();
+                
+                if (data.error) {
+                    container.innerHTML = '<div class="error-box">' + data.error + '</div>';
+                    return;
+                }
+
+                allBans = data || [];
+                
+                if (!data || data.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No banned users</div>';
+                    return;
+                }
+                
+                let html = '<table><thead><tr><th>User</th><th>Reason</th><th>Duration</th><th>Actions</th></tr></thead><tbody>';
+                data.forEach(b => {
+                    let duration = 'Permanent';
+                    if (b.expires_at) {
+                        const expires = new Date(b.expires_at);
+                        const now = new Date();
+                        const diff = Math.ceil((expires - now) / (1000 * 60 * 60));
+                        duration = diff > 24 ? `${Math.ceil(diff/24)}d` : `${diff}h`;
+                    }
+                    html += `<tr>
+                        <td>${escapeHtml(b.user_name)}<br><small style="color:#888">${escapeHtml(b.user_email)}</small></td>
+                        <td>${escapeHtml(b.reason)}</td>
+                        <td>${duration}</td>
+                        <td><button class="btn btn-success" onclick="unbanUser(${b.user_id})">Unban</button></td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (err) {
+                container.innerHTML = '<div class="error-box">Failed to load bans</div>';
+            }
+        }
+
+        async function loadComments() {
+            if (!permissions.includes('delete_comments')) return;
+            
+            const container = document.getElementById('commentsContent');
+            try {
+                const res = await fetch('/admin/api/comments');
+                const data = await res.json();
+                
+                if (data.error) {
+                    container.innerHTML = '<div class="error-box">' + data.error + '</div>';
+                    return;
+                }
+                
+                if (!data || data.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No comments</div>';
+                    return;
+                }
+                
+                let html = '';
+                data.forEach(c => {
+                    html += `
+                        <div class="comment-card">
+                            <div class="comment-header">
+                                <span><strong>${escapeHtml(c.user_name)}</strong></span>
+                                <span>${new Date(c.timestamp).toLocaleString()}</span>
+                            </div>
+                            <div class="comment-text">${escapeHtml(c.text)}</div>
+                            <div>
+                                <button class="btn btn-danger" onclick="deleteComment(${c.id})">🗑️ Delete</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            } catch (err) {
+                container.innerHTML = '<div class="error-box">Failed to load comments</div>';
+            }
+        }
+
+        async function loadSettings() {
+            const container = document.getElementById('settingsContent');
+            try {
+                const [settingsRes, systemRes] = await Promise.all([
+                    fetch('/admin/api/settings'),
+                    fetch('/admin/api/system/settings')
+                ]);
+                const data = await settingsRes.json();
+                const systemData = await systemRes.json();
+                
+                if (!data.can_edit) {
+                    container.innerHTML = '<div class="empty-state">Only owners can view/edit settings</div>';
+                    return;
+                }
+                
+                const currentInterval = parseInt(systemData.verse_interval || 60, 10);
+
+                container.innerHTML = `
+                    <div class="settings-meta"><strong>Site:</strong> ${data.site_name}</div>
+                    <div class="settings-meta"><strong>Maintenance:</strong> ${data.maintenance_mode}</div>
+                    <div class="interval-setting-card">
+                        <div class="interval-setting-title">Verse Refresh Interval</div>
+                        <div class="interval-setting-help">Controls how often new verses are generated for users.</div>
+                        <div class="interval-setting-controls">
+                            <select id="dashboardVerseInterval" class="interval-select">
+                                <option value="30" ${currentInterval === 30 ? 'selected' : ''}>30 seconds</option>
+                                <option value="60" ${currentInterval === 60 ? 'selected' : ''}>1 minute</option>
+                                <option value="120" ${currentInterval === 120 ? 'selected' : ''}>2 minutes</option>
+                                <option value="300" ${currentInterval === 300 ? 'selected' : ''}>5 minutes</option>
+                                <option value="600" ${currentInterval === 600 ? 'selected' : ''}>10 minutes</option>
+                            </select>
+                            <button class="btn btn-primary" onclick="saveDashboardInterval()">Save Interval</button>
+                        </div>
+                    </div>
+                    <h4 style="margin-bottom:15px;">🔐 Role Codes:</h4>
+                    <div style="font-family:monospace;background:rgba(0,0,0,0.3);padding:15px;border-radius:8px;line-height:2;">
+                        <div>Host: ${data.codes.host}</div>
+                        <div>Mod: ${data.codes.mod}</div>
+                        <div>Co-Owner: ${data.codes.co_owner}</div>
+                        <div>Owner: ${data.codes.owner}</div>
+                    </div>
+                    <p style="color:#888;margin-top:20px;font-size:0.85rem;">
+                        💡 Update these in Render environment variables
+                    </p>
+                `;
+            } catch (err) {
+                container.innerHTML = '<div class="error-box">Failed to load settings</div>';
+            }
+        }
+
+        async function saveDashboardInterval() {
+            const select = document.getElementById('dashboardVerseInterval');
+            if (!select) return;
+            const interval = parseInt(select.value, 10);
+
+            try {
+                const res = await fetch('/admin/api/system/settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ verse_interval: interval })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Interval updated');
+                } else {
+                    showToast('❌ Failed: ' + (data.error || 'Unknown'));
+                }
+            } catch (err) {
+                showToast('❌ Error: ' + err.message);
+            }
+        }
+
+        async function loadAuditLogs() {
+            const container = document.getElementById('auditContent');
+            try {
+                const res = await fetch('/admin/api/audit-logs');
+                const data = await res.json();
+                
+                if (data.error) {
+                    container.innerHTML = '<div class="error-box">' + data.error + '</div>';
+                    return;
+                }
+                
+                if (!data || data.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No audit logs</div>';
+                    return;
+                }
+
+                allAuditLogs = data || [];
+                
+                let html = '<table><thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Details</th></tr></thead><tbody>';
+                data.forEach(l => {
+                    const time = l.timestamp ? new Date(l.timestamp).toLocaleString() : '-';
+                    const target = l.target_name
+                        ? `${escapeHtml(l.target_name)}${l.target_email ? `<br><small style=\"color:#888\">${escapeHtml(l.target_email)}</small>` : ''}`
+                        : '-';
+                    html += `<tr>
+                        <td>${time}</td>
+                        <td>${escapeHtml(l.admin_name || l.admin_id || 'system')}</td>
+                        <td>${escapeHtml(l.action || 'UNKNOWN')}</td>
+                        <td>${target}</td>
+                        <td>${escapeHtml(l.details || '-')}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (err) {
+                container.innerHTML = '<div class="error-box">Failed to load logs</div>';
+            }
+        }
+
+        function filterRestrictions() {
+            const q = (document.getElementById('restrictionSearch')?.value || '').toLowerCase().trim();
+            const rows = (allRestrictions || []).filter(r =>
+                !q ||
+                String(r.user_name || '').toLowerCase().includes(q) ||
+                String(r.user_email || '').toLowerCase().includes(q) ||
+                String(r.reason || '').toLowerCase().includes(q)
+            );
+
+            const container = document.getElementById('restrictionsContent');
+            if (!rows.length) {
+                container.innerHTML = '<div class="empty-state">No matching restrictions</div>';
+                return;
+            }
+            let html = '<table><thead><tr><th>User</th><th>Reason</th><th>Expires</th><th>Actions</th></tr></thead><tbody>';
+            rows.forEach(r => {
+                const expires = r.expires_at ? new Date(r.expires_at).toLocaleString() : 'Unknown';
+                html += `<tr>
+                    <td>${escapeHtml(r.user_name)}<br><small style="color:#888">${escapeHtml(r.user_email)}</small></td>
+                    <td>${escapeHtml(r.reason)}</td>
+                    <td>${expires}</td>
+                    <td><button class="btn btn-success" onclick="removeRestriction(${r.user_id})">Remove</button></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function filterBans() {
+            const q = (document.getElementById('banSearch')?.value || '').toLowerCase().trim();
+            const banType = (document.getElementById('banTypeFilter')?.value || '').trim();
+            const now = Date.now();
+            const rows = (allBans || []).filter(b => {
+                const matchesText = !q ||
+                    String(b.user_name || '').toLowerCase().includes(q) ||
+                    String(b.user_email || '').toLowerCase().includes(q) ||
+                    String(b.reason || '').toLowerCase().includes(q);
+                if (!matchesText) return false;
+                if (!banType) return true;
+                const isTemporary = !!b.expires_at && (new Date(b.expires_at).getTime() > now);
+                return banType === 'temporary' ? isTemporary : !isTemporary;
+            });
+
+            const container = document.getElementById('bansContent');
+            if (!rows.length) {
+                container.innerHTML = '<div class="empty-state">No matching bans</div>';
+                return;
+            }
+            let html = '<table><thead><tr><th>User</th><th>Reason</th><th>Duration</th><th>Actions</th></tr></thead><tbody>';
+            rows.forEach(b => {
+                let duration = 'Permanent';
+                if (b.expires_at) {
+                    const expires = new Date(b.expires_at);
+                    const diff = Math.ceil((expires - new Date()) / (1000 * 60 * 60));
+                    duration = diff > 24 ? `${Math.ceil(diff / 24)}d` : `${diff}h`;
+                }
+                html += `<tr>
+                    <td>${escapeHtml(b.user_name)}<br><small style="color:#888">${escapeHtml(b.user_email)}</small></td>
+                    <td>${escapeHtml(b.reason)}</td>
+                    <td>${duration}</td>
+                    <td><button class="btn btn-success" onclick="unbanUser(${b.user_id})">Unban</button></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function filterAudit() {
+            const fromDate = document.getElementById('auditDateFrom')?.value;
+            const toDate = document.getElementById('auditDateTo')?.value;
+            const action = (document.getElementById('auditActionFilter')?.value || '').trim().toUpperCase();
+
+            const fromTs = fromDate ? new Date(fromDate + 'T00:00:00').getTime() : null;
+            const toTs = toDate ? new Date(toDate + 'T23:59:59').getTime() : null;
+            const rows = (allAuditLogs || []).filter(l => {
+                const ts = l.timestamp ? new Date(l.timestamp).getTime() : null;
+                if (fromTs && ts && ts < fromTs) return false;
+                if (toTs && ts && ts > toTs) return false;
+                if (action) return String(l.action || '').toUpperCase().includes(action);
+                return true;
+            });
+
+            const container = document.getElementById('auditContent');
+            if (!rows.length) {
+                container.innerHTML = '<div class="empty-state">No matching audit logs</div>';
+                return;
+            }
+
+            let html = '<table><thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Details</th></tr></thead><tbody>';
+            rows.forEach(l => {
+                const time = l.timestamp ? new Date(l.timestamp).toLocaleString() : '-';
+                const target = l.target_name
+                    ? `${escapeHtml(l.target_name)}${l.target_email ? `<br><small style=\"color:#888\">${escapeHtml(l.target_email)}</small>` : ''}`
+                    : '-';
+                html += `<tr>
+                    <td>${time}</td>
+                    <td>${escapeHtml(l.admin_name || l.admin_id || 'system')}</td>
+                    <td>${escapeHtml(l.action || 'UNKNOWN')}</td>
+                    <td>${target}</td>
+                    <td>${escapeHtml(l.details || '-')}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function exportData(type) {
+            let rows = [];
+            let headers = [];
+            if (type === 'users') {
+                headers = ['id', 'name', 'email', 'role', 'is_admin', 'is_banned', 'created_at'];
+                rows = allUsers || [];
+            } else if (type === 'restrictions') {
+                headers = ['user_id', 'user_name', 'user_email', 'reason', 'restricted_by', 'restricted_at', 'expires_at'];
+                rows = allRestrictions || [];
+            } else if (type === 'bans') {
+                headers = ['user_id', 'user_name', 'user_email', 'reason', 'banned_by', 'banned_at', 'expires_at'];
+                rows = allBans || [];
+            } else if (type === 'audit') {
+                headers = ['id', 'timestamp', 'admin_id', 'action', 'target_user_id', 'target_name', 'target_email', 'details'];
+                rows = allAuditLogs || [];
+            }
+
+            if (!rows.length) {
+                showToast('No data to export');
+                return;
+            }
+
+            const csv = [
+                headers.join(','),
+                ...rows.map(r => headers.map(h => `"${String(r[h] ?? '').replace(/"/g, '""')}"`).join(','))
+            ].join('\n');
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${type}-export-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('Export complete');
+        }
+
+        // Ban functions
+        function selectDuration(duration) {
+            selectedDuration = duration;
+            document.querySelectorAll('#banModal .duration-btn').forEach(btn => btn.classList.remove('selected'));
+            document.querySelector(`#banModal .duration-btn[data-duration="${duration}"]`).classList.add('selected');
+        }
+
+        function openBanModal(userId) {
+            banUserId = userId;
+            document.getElementById('banModal').classList.add('active');
+        }
+
+        function closeBanModal() {
+            document.getElementById('banModal').classList.remove('active');
+            document.getElementById('banReason').value = '';
+            banUserId = null;
+        }
+
+        async function confirmBan() {
+            if (!banUserId) return;
+            const userId = banUserId; // Save before closing modal
+            const btn = document.querySelector('#banModal .btn-danger');
+            btn.textContent = '⏳ Banning...';
+            btn.disabled = true;
+            
+            const reason = document.getElementById('banReason').value.trim() || 'No reason';
+            closeBanModal();
+            showToast('Banning user...');
+            
+            try {
+                const res = await fetch(`/admin/api/users/${userId}/ban`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({banned: true, reason, duration: selectedDuration})
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('✅ User banned!');
+                    loadAllData();
+                } else {
+                    showToast('❌ Failed: ' + (data.error || 'Unknown'));
+                }
+            } catch (err) {
+                showToast('❌ Error: ' + err.message);
+            } finally {
+                btn.textContent = 'Ban User';
+                btn.disabled = false;
+            }
+        }
+
+        async function unbanUser(userId) {
+            if (!confirm('Unban this user?')) return;
+            showToast('Unbanning user...');
+            
+            try {
+                const res = await fetch(`/admin/api/users/${userId}/ban`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({banned: false})
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('✅ User unbanned!');
+                    loadAllData();
+                } else {
+                    showToast('❌ Failed: ' + (data.error || 'Unknown'));
+                }
+            } catch (err) {
+                showToast('❌ Error: ' + err.message);
+            }
+        }
+
+        // Restrict functions
+        function selectRestrictHours(hours) {
+            selectedHours = hours;
+            document.querySelectorAll('#restrictModal .duration-btn').forEach(btn => btn.classList.remove('selected'));
+            document.querySelector(`#restrictModal .duration-btn[data-hours="${hours}"]`).classList.add('selected');
+        }
+
+        function openRestrictModal(userId) {
+            restrictUserId = userId;
+            document.getElementById('restrictModal').classList.add('active');
+        }
+
+        function closeRestrictModal() {
+            document.getElementById('restrictModal').classList.remove('active');
+            document.getElementById('restrictReason').value = '';
+            restrictUserId = null;
+        }
+
+        async function confirmRestrict() {
+            if (!restrictUserId) return;
+            const userId = restrictUserId; // Save before closing modal
+            const reason = document.getElementById('restrictReason').value.trim() || 'No reason';
+            closeRestrictModal();
+            showToast('Restricting user...');
+            
+            try {
+                const res = await fetch(`/admin/api/users/${userId}/restrict`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({hours: selectedHours, reason})
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast(`✅ User restricted for ${selectedHours}h!`);
+                    loadAllData();
+                } else {
+                    showToast('❌ Failed: ' + (data.error || 'Unknown'));
+                }
+            } catch (err) {
+                showToast('❌ Error: ' + err.message);
+            }
+        }
+
+        async function removeRestriction(userId) {
+            if (!confirm('Remove comment restriction?')) return;
+            
+            try {
+                const res = await fetch(`/admin/api/users/${userId}/restrict`, {method: 'DELETE'});
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('✅ Restriction removed!');
+                    loadAllData();
+                } else {
+                    showToast('❌ Failed: ' + (data.error || 'Unknown'));
+                }
+            } catch (err) {
+                showToast('❌ Error: ' + err.message);
+            }
+        }
+
+        async function deleteComment(commentId) {
+            if (!confirm('Delete this comment?')) return;
+            
+            try {
+                const res = await fetch(`/admin/api/comments/${commentId}`, {method: 'DELETE'});
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('✅ Comment deleted!');
+                    loadComments();
+                } else {
+                    showToast('❌ Failed: ' + (data.error || 'Unknown'));
+                }
+            } catch (err) {
+                showToast('❌ Error: ' + err.message);
+            }
+        }
+
+        async function changeRole(userId, currentRole) {
+            const roles = ['user', 'host', 'mod', 'co_owner', 'owner'];
+            const newRole = prompt(`Change role to:\n${roles.join(', ')}`, currentRole);
+            if (!newRole || newRole === currentRole) return;
+            
+            try {
+                const res = await fetch(`/admin/api/users/${userId}/role`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({role: newRole})
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('✅ Role updated!');
+                    loadUsers();
+                } else {
+                    showToast('❌ Failed: ' + (data.error || 'Unknown'));
+                }
+            } catch (err) {
+                showToast('❌ Error: ' + err.message);
+            }
+        }
+
+        function showSection(section) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.querySelector(`.nav-item[data-section="${section}"]`)?.classList.add('active');
+            document.querySelectorAll('[id$="-section"]').forEach(el => el.classList.add('hidden'));
+            document.getElementById(section + '-section').classList.remove('hidden');
+            
+            const titles = {
+                dashboard: 'Dashboard', users: 'Users', restrictions: 'Restrictions',
+                bans: 'Banned Users', comments: 'Comments', audit: 'Audit Logs', settings: 'Settings'
+            };
+            document.getElementById('pageTitle').textContent = titles[section] || 'Dashboard';
+            
+            if (section === 'settings') loadSettings();
+            if (section === 'audit') loadAuditLogs();
+        }
+
+        async function logout() {
+            await fetch('/admin/logout', {method: 'POST'});
+            window.location.href = '/admin/login';
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showToast(msg) {
+            const existing = document.querySelector('.toast');
+            if (existing) existing.remove();
+            
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        async function loadRecentActivity() {
+            const container = document.getElementById('recentActivity');
+            try {
+                const res = await fetch('/admin/api/recent-activity');
+                const data = await res.json();
+                
+                if (!data || data.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No recent activity</div>';
+                    return;
+                }
+                
+                const icons = {
+                    'BAN': '[B]', 'UNBAN': '[U]', 'RESTRICT_COMMENTS': '[R]', 'UNRESTRICT': '[U]',
+                    'DELETE_COMMENT': '[D]', 'UPDATE_ROLE': '[ROLE]', 'ADMIN_LOGIN': '[LOGIN]',
+                    'UPDATE_SETTINGS': '[CFG]'
+                };
+                
+                let html = '';
+                data.forEach(log => {
+                    const icon = icons[log.action] || '[LOG]';
+                    const time = log.timestamp ? new Date(log.timestamp).toLocaleString() : '-';
+                    const adminName = escapeHtml(log.admin_name || log.admin_id || 'system');
+                    const actionName = escapeHtml((log.action || 'UNKNOWN').replace(/_/g, ' '));
+                    const targetLine = log.target_name
+                        ? `<div class="activity-details">Target: ${escapeHtml(log.target_name)}${log.target_email ? ` (${escapeHtml(log.target_email)})` : ''}${log.target_role ? ` [${escapeHtml(log.target_role)}]` : ''}</div>`
+                        : '';
+
+                    html += `
+                        <div class="activity-item">
+                            <div class="activity-icon">${icon}</div>
+                            <div class="activity-content">
+                                <div class="activity-text">
+                                    <strong>${actionName}</strong> by ${adminName}
+                                </div>
+                                ${targetLine}
+                                <div class="activity-details">${escapeHtml(log.details || '')}</div>
+                                <div class="activity-time">${time}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            } catch (err) {
+                container.innerHTML = '<div class="empty-state">Failed to load activity</div>';
+            }
+        }
+
+        // Initialize
+        loadPermissions().then(() => {
+            loadAllData();
+            loadRecentActivity();
+        });
+    </script>
+</body>
+</html>
+
