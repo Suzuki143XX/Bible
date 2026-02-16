@@ -8,6 +8,7 @@ import os
 import sqlite3
 import re
 import json
+from collections import defaultdict
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -70,6 +71,137 @@ def require_permission(permission):
 
 def can_modify_role(admin_role, target_role):
     return ROLE_HIERARCHY.get(admin_role, 0) > ROLE_HIERARCHY.get(target_role, 0)
+
+def _iso_now():
+    return datetime.now().isoformat()
+
+def _parse_dt(value):
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    # Normalize common SQLite/Postgres timestamp forms.
+    text = text.replace("Z", "+00:00")
+    for candidate in (text, text.replace(" ", "T")):
+        try:
+            return datetime.fromisoformat(candidate)
+        except Exception:
+            continue
+    # Last-resort trim fractional offset artifacts.
+    try:
+        return datetime.fromisoformat(text[:19])
+    except Exception:
+        return None
+
+def _ensure_admin_feature_tables(conn, c, db_type):
+    if db_type == 'postgres':
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS user_presence (
+                user_id INTEGER PRIMARY KEY,
+                last_seen TIMESTAMP,
+                last_path TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS user_notifications (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER,
+                title TEXT,
+                message TEXT,
+                notif_type TEXT DEFAULT 'announcement',
+                source TEXT DEFAULT 'admin',
+                is_read INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                sent_at TIMESTAMP
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS admin_announcements (
+                id SERIAL PRIMARY KEY,
+                title TEXT,
+                message TEXT,
+                is_global INTEGER DEFAULT 1,
+                target_user_id INTEGER,
+                scheduled_for TIMESTAMP,
+                status TEXT DEFAULT 'scheduled',
+                created_by TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                sent_at TIMESTAMP
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS admin_chat_messages (
+                id SERIAL PRIMARY KEY,
+                admin_role TEXT,
+                message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS donation_events (
+                id SERIAL PRIMARY KEY,
+                amount_cents INTEGER,
+                currency TEXT DEFAULT 'usd',
+                status TEXT DEFAULT 'paid',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+    else:
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS user_presence (
+                user_id INTEGER PRIMARY KEY,
+                last_seen TEXT,
+                last_path TEXT,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS user_notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                title TEXT,
+                message TEXT,
+                notif_type TEXT DEFAULT 'announcement',
+                source TEXT DEFAULT 'admin',
+                is_read INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                sent_at TEXT
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS admin_announcements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT,
+                message TEXT,
+                is_global INTEGER DEFAULT 1,
+                target_user_id INTEGER,
+                scheduled_for TEXT,
+                status TEXT DEFAULT 'scheduled',
+                created_by TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                sent_at TEXT
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS admin_chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_role TEXT,
+                message TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS donation_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                amount_cents INTEGER,
+                currency TEXT DEFAULT 'usd',
+                status TEXT DEFAULT 'paid',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+    conn.commit()
 
 def _get_table_columns(c, db_type, table_name):
     """Return lowercase column names for a table."""
@@ -1474,10 +1606,36 @@ def get_recent_activity():
 @require_permission('view_settings')
 def get_settings():
     admin = get_admin_session()
+    maintenance_mode = os.environ.get('MAINTENANCE_MODE', 'false')
+    conn = None
+    try:
+        conn, db_type = get_db()
+        c = conn.cursor()
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        if db_type == 'postgres':
+            c.execute("SELECT value FROM system_settings WHERE key = %s", ('maintenance_mode',))
+        else:
+            c.execute("SELECT value FROM system_settings WHERE key = ?", ('maintenance_mode',))
+        row = c.fetchone()
+        if row:
+            maintenance_mode = (row.get('value') if hasattr(row, 'keys') else row[0]) or maintenance_mode
+        conn.close()
+    except Exception:
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
     
     return jsonify({
         "site_name": os.environ.get('SITE_NAME', 'AI.Bible'),
-        "maintenance_mode": os.environ.get('MAINTENANCE_MODE', 'false'),
+        "maintenance_mode": maintenance_mode,
         "codes": ROLE_CODES,
         "role": admin['role'],
         "is_owner": admin['role'] == 'owner',
@@ -1490,6 +1648,648 @@ def check_session():
     if admin:
         return jsonify({"logged_in": True, "role": admin['role']})
     return jsonify({"logged_in": False}), 401
+
+def _dispatch_announcement_row(c, db_type, announcement_row):
+    """Insert notification rows for target users and mark announcement sent."""
+    if hasattr(announcement_row, 'keys'):
+        ann_id = announcement_row.get('id')
+        title = announcement_row.get('title') or 'Announcement'
+        message = announcement_row.get('message') or ''
+        is_global = int(announcement_row.get('is_global') or 0) == 1
+        target_user_id = announcement_row.get('target_user_id')
+    else:
+        ann_id, title, message, is_global, target_user_id = announcement_row[0], announcement_row[1], announcement_row[2], (announcement_row[3] == 1), announcement_row[4]
+
+    now_iso = _iso_now()
+    created = 0
+
+    if is_global:
+        if db_type == 'postgres':
+            c.execute("SELECT id FROM users")
+        else:
+            c.execute("SELECT id FROM users")
+        users = c.fetchall()
+        user_ids = []
+        for u in users:
+            uid = u.get('id') if hasattr(u, 'keys') else u[0]
+            if uid is not None:
+                user_ids.append(uid)
+        for uid in user_ids:
+            if db_type == 'postgres':
+                c.execute("""
+                    INSERT INTO user_notifications (user_id, title, message, notif_type, source, is_read, created_at, sent_at)
+                    VALUES (%s, %s, %s, %s, %s, 0, %s, %s)
+                """, (uid, title, message, 'announcement', 'admin', now_iso, now_iso))
+            else:
+                c.execute("""
+                    INSERT INTO user_notifications (user_id, title, message, notif_type, source, is_read, created_at, sent_at)
+                    VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+                """, (uid, title, message, 'announcement', 'admin', now_iso, now_iso))
+            created += 1
+    elif target_user_id is not None:
+        if db_type == 'postgres':
+            c.execute("""
+                INSERT INTO user_notifications (user_id, title, message, notif_type, source, is_read, created_at, sent_at)
+                VALUES (%s, %s, %s, %s, %s, 0, %s, %s)
+            """, (target_user_id, title, message, 'direct_message', 'admin', now_iso, now_iso))
+        else:
+            c.execute("""
+                INSERT INTO user_notifications (user_id, title, message, notif_type, source, is_read, created_at, sent_at)
+                VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+            """, (target_user_id, title, message, 'direct_message', 'admin', now_iso, now_iso))
+        created = 1
+
+    if db_type == 'postgres':
+        c.execute("UPDATE admin_announcements SET status = %s, sent_at = %s WHERE id = %s", ('sent', now_iso, ann_id))
+    else:
+        c.execute("UPDATE admin_announcements SET status = ?, sent_at = ? WHERE id = ?", ('sent', now_iso, ann_id))
+
+    return created
+
+@admin_bp.route('/api/insights')
+@admin_required
+@require_permission('view_audit')
+def get_admin_insights():
+    conn = None
+    try:
+        conn, db_type = get_db()
+        c = conn.cursor()
+        _ensure_admin_feature_tables(conn, c, db_type)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        if db_type == 'postgres':
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS daily_actions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    action TEXT NOT NULL,
+                    verse_id INTEGER,
+                    event_date TEXT NOT NULL,
+                    timestamp TEXT
+                )
+            """)
+        else:
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS daily_actions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    action TEXT NOT NULL,
+                    verse_id INTEGER,
+                    event_date TEXT NOT NULL,
+                    timestamp TEXT
+                )
+            """)
+
+        now = datetime.now()
+        active_cutoff = now - timedelta(minutes=5)
+        retention_1d_cutoff = now - timedelta(days=1)
+        retention_7d_cutoff = now - timedelta(days=7)
+        retention_30d_cutoff = now - timedelta(days=30)
+
+        # Process due scheduled announcements while loading insights.
+        now_iso = _iso_now()
+        if db_type == 'postgres':
+            c.execute("""
+                SELECT id, title, message, is_global, target_user_id
+                FROM admin_announcements
+                WHERE status = %s AND scheduled_for IS NOT NULL AND scheduled_for <= %s
+                ORDER BY scheduled_for ASC
+            """, ('scheduled', now_iso))
+        else:
+            c.execute("""
+                SELECT id, title, message, is_global, target_user_id
+                FROM admin_announcements
+                WHERE status = ? AND scheduled_for IS NOT NULL AND scheduled_for <= ?
+                ORDER BY scheduled_for ASC
+            """, ('scheduled', now_iso))
+        due_rows = c.fetchall()
+        for row in due_rows:
+            _dispatch_announcement_row(c, db_type, row)
+
+        # Active users now from presence pings.
+        c.execute("SELECT user_id, last_seen FROM user_presence")
+        presence_rows = c.fetchall()
+        active_users_now = 0
+        for row in presence_rows:
+            last_seen = row.get('last_seen') if hasattr(row, 'keys') else row[1]
+            dt = _parse_dt(last_seen)
+            if dt and dt >= active_cutoff:
+                active_users_now += 1
+
+        # Recent signups.
+        c.execute("SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC LIMIT 8")
+        signup_rows = c.fetchall()
+        recent_signups = []
+        for row in signup_rows:
+            if hasattr(row, 'keys'):
+                recent_signups.append({
+                    "id": row.get('id'),
+                    "name": row.get('name') or "Unknown",
+                    "email": row.get('email') or "",
+                    "role": row.get('role') or "user",
+                    "created_at": row.get('created_at')
+                })
+            else:
+                recent_signups.append({
+                    "id": row[0],
+                    "name": row[1] or "Unknown",
+                    "email": row[2] or "",
+                    "role": row[3] or "user",
+                    "created_at": row[4]
+                })
+
+        # Total users.
+        c.execute("SELECT COUNT(*) FROM users")
+        total_users_row = c.fetchone()
+        total_users = int(total_users_row[0] if not hasattr(total_users_row, 'keys') else list(total_users_row.values())[0] or 0)
+
+        # Daily active users (from daily_actions table).
+        c.execute("""
+            SELECT event_date, COUNT(DISTINCT user_id) AS cnt
+            FROM daily_actions
+            GROUP BY event_date
+            ORDER BY event_date DESC
+            LIMIT 14
+        """)
+        dau_rows = c.fetchall()
+        dau_series = []
+        for row in reversed(dau_rows):
+            if hasattr(row, 'keys'):
+                dau_series.append({"date": row.get('event_date'), "count": int(row.get('cnt') or 0)})
+            else:
+                dau_series.append({"date": row[0], "count": int(row[1] or 0)})
+
+        # User growth (new users/day).
+        c.execute("SELECT created_at FROM users")
+        created_rows = c.fetchall()
+        growth_counter = defaultdict(int)
+        for row in created_rows:
+            val = row.get('created_at') if hasattr(row, 'keys') else row[0]
+            dt = _parse_dt(val)
+            if dt:
+                growth_counter[dt.date().isoformat()] += 1
+        growth_dates = sorted(growth_counter.keys())[-14:]
+        growth_series = [{"date": d, "count": growth_counter[d]} for d in growth_dates]
+
+        # Retention windows from daily_actions activity.
+        c.execute("SELECT user_id, created_at FROM users")
+        all_user_rows = c.fetchall()
+        c.execute("SELECT user_id, timestamp FROM daily_actions")
+        action_rows = c.fetchall()
+        active_1d = set()
+        active_7d = set()
+        active_30d = set()
+        for row in action_rows:
+            uid = row.get('user_id') if hasattr(row, 'keys') else row[0]
+            ts = row.get('timestamp') if hasattr(row, 'keys') else row[1]
+            dt = _parse_dt(ts)
+            if not dt or uid is None:
+                continue
+            if dt >= retention_1d_cutoff:
+                active_1d.add(uid)
+            if dt >= retention_7d_cutoff:
+                active_7d.add(uid)
+            if dt >= retention_30d_cutoff:
+                active_30d.add(uid)
+
+        base_users_for_1d = 0
+        base_users_for_7d = 0
+        base_users_for_30d = 0
+        for row in all_user_rows:
+            created_at = row.get('created_at') if hasattr(row, 'keys') else row[1]
+            dt = _parse_dt(created_at)
+            if dt and dt <= retention_1d_cutoff:
+                base_users_for_1d += 1
+            if dt and dt <= retention_7d_cutoff:
+                base_users_for_7d += 1
+            if dt and dt <= retention_30d_cutoff:
+                base_users_for_30d += 1
+
+        retention = {
+            "day_1": round((len(active_1d) / base_users_for_1d) * 100, 2) if base_users_for_1d else 0,
+            "day_7": round((len(active_7d) / base_users_for_7d) * 100, 2) if base_users_for_7d else 0,
+            "day_30": round((len(active_30d) / base_users_for_30d) * 100, 2) if base_users_for_30d else 0
+        }
+
+        # Conversion rate: users with at least one like/save.
+        c.execute("""
+            SELECT COUNT(DISTINCT user_id) FROM (
+                SELECT user_id FROM likes
+                UNION
+                SELECT user_id FROM saves
+            ) t
+        """)
+        conv_row = c.fetchone()
+        converted_users = int(conv_row[0] if not hasattr(conv_row, 'keys') else list(conv_row.values())[0] or 0)
+        conversion_rate = round((converted_users / total_users) * 100, 2) if total_users else 0
+
+        # Top active users by actions.
+        c.execute("""
+            SELECT da.user_id, COUNT(*) AS cnt, u.name, u.email
+            FROM daily_actions da
+            LEFT JOIN users u ON u.id = da.user_id
+            GROUP BY da.user_id, u.name, u.email
+            ORDER BY cnt DESC
+            LIMIT 8
+        """)
+        top_rows = c.fetchall()
+        top_active_users = []
+        for row in top_rows:
+            if hasattr(row, 'keys'):
+                top_active_users.append({
+                    "user_id": row.get('user_id'),
+                    "name": row.get('name') or "Unknown",
+                    "email": row.get('email') or "",
+                    "actions": int(row.get('cnt') or 0)
+                })
+            else:
+                top_active_users.append({
+                    "user_id": row[0],
+                    "name": row[2] or "Unknown",
+                    "email": row[3] or "",
+                    "actions": int(row[1] or 0)
+                })
+
+        # Most used features.
+        c.execute("""
+            SELECT action, COUNT(*) AS cnt
+            FROM daily_actions
+            GROUP BY action
+            ORDER BY cnt DESC
+            LIMIT 10
+        """)
+        feature_rows = c.fetchall()
+        most_used_features = []
+        for row in feature_rows:
+            if hasattr(row, 'keys'):
+                most_used_features.append({"feature": row.get('action') or "unknown", "count": int(row.get('cnt') or 0)})
+            else:
+                most_used_features.append({"feature": row[0] or "unknown", "count": int(row[1] or 0)})
+
+        # Revenue (if donation events are being inserted externally).
+        c.execute("SELECT COALESCE(SUM(amount_cents), 0) FROM donation_events WHERE status = 'paid'")
+        rev_row = c.fetchone()
+        revenue_cents = int(rev_row[0] if not hasattr(rev_row, 'keys') else list(rev_row.values())[0] or 0)
+
+        # Scheduled/sent announcement counts.
+        c.execute("SELECT COUNT(*) FROM admin_announcements WHERE status = 'scheduled'")
+        scheduled_row = c.fetchone()
+        announcements_scheduled = int(scheduled_row[0] if not hasattr(scheduled_row, 'keys') else list(scheduled_row.values())[0] or 0)
+        c.execute("SELECT COUNT(*) FROM admin_announcements WHERE status = 'sent'")
+        sent_row = c.fetchone()
+        announcements_sent = int(sent_row[0] if not hasattr(sent_row, 'keys') else list(sent_row.values())[0] or 0)
+
+        # Maintenance mode state
+        if db_type == 'postgres':
+            c.execute("SELECT value FROM system_settings WHERE key = %s", ('maintenance_mode',))
+        else:
+            c.execute("SELECT value FROM system_settings WHERE key = ?", ('maintenance_mode',))
+        maint_row = c.fetchone()
+        maintenance_mode = False
+        if maint_row:
+            maint_val = maint_row.get('value') if hasattr(maint_row, 'keys') else maint_row[0]
+            maintenance_mode = str(maint_val).strip().lower() in ('1', 'true', 'yes', 'on')
+
+        conn.commit()
+        conn.close()
+        return jsonify({
+            "active_users_now": active_users_now,
+            "recent_signups": recent_signups,
+            "daily_active_users": dau_series,
+            "user_growth": growth_series,
+            "retention": retention,
+            "conversion_rate": conversion_rate,
+            "top_active_users": top_active_users,
+            "most_used_features": most_used_features,
+            "revenue_cents": revenue_cents,
+            "announcements_scheduled": announcements_scheduled,
+            "announcements_sent": announcements_sent,
+            "total_users": total_users,
+            "maintenance_mode": maintenance_mode
+        })
+    except Exception as e:
+        print(f"[ERROR] Admin insights: {e}")
+        if conn:
+            try:
+                conn.rollback()
+                conn.close()
+            except:
+                pass
+        return jsonify({"error": str(e)}), 500
+
+@admin_bp.route('/api/announcements', methods=['GET'])
+@admin_required
+@require_permission('view_audit')
+def list_announcements():
+    conn = None
+    try:
+        conn, db_type = get_db()
+        c = conn.cursor()
+        _ensure_admin_feature_tables(conn, c, db_type)
+        c.execute("""
+            SELECT id, title, message, is_global, target_user_id, scheduled_for, status, created_by, created_at, sent_at
+            FROM admin_announcements
+            ORDER BY created_at DESC
+            LIMIT 100
+        """)
+        rows = c.fetchall()
+        conn.close()
+        out = []
+        for row in rows:
+            if hasattr(row, 'keys'):
+                out.append({k: row.get(k) for k in ['id', 'title', 'message', 'is_global', 'target_user_id', 'scheduled_for', 'status', 'created_by', 'created_at', 'sent_at']})
+            else:
+                out.append({
+                    "id": row[0], "title": row[1], "message": row[2], "is_global": row[3], "target_user_id": row[4],
+                    "scheduled_for": row[5], "status": row[6], "created_by": row[7], "created_at": row[8], "sent_at": row[9]
+                })
+        return jsonify(out)
+    except Exception as e:
+        print(f"[ERROR] List announcements: {e}")
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
+        return jsonify({"error": str(e)}), 500
+
+@admin_bp.route('/api/announcements', methods=['POST'])
+@admin_required
+@require_permission('view_audit')
+def create_announcement():
+    conn = None
+    try:
+        data = request.get_json() or {}
+        title = str(data.get('title') or '').strip() or 'Announcement'
+        message = str(data.get('message') or '').strip()
+        if not message:
+            return jsonify({"error": "Message required"}), 400
+        is_global = 1 if bool(data.get('is_global', True)) else 0
+        target_user_id = data.get('target_user_id')
+        if target_user_id in ('', None):
+            target_user_id = None
+        else:
+            target_user_id = int(target_user_id)
+            is_global = 0
+        scheduled_for = str(data.get('scheduled_for') or '').strip() or None
+        status = 'scheduled' if scheduled_for else 'draft'
+
+        conn, db_type = get_db()
+        c = conn.cursor()
+        _ensure_admin_feature_tables(conn, c, db_type)
+        admin = get_admin_session()
+        admin_role = admin['role'] if admin else 'unknown'
+        now_iso = _iso_now()
+
+        if db_type == 'postgres':
+            c.execute("""
+                INSERT INTO admin_announcements (title, message, is_global, target_user_id, scheduled_for, status, created_by, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (title, message, is_global, target_user_id, scheduled_for, status, admin_role, now_iso))
+            row = c.fetchone()
+            announcement_id = row.get('id') if hasattr(row, 'keys') else row[0]
+        else:
+            c.execute("""
+                INSERT INTO admin_announcements (title, message, is_global, target_user_id, scheduled_for, status, created_by, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (title, message, is_global, target_user_id, scheduled_for, status, admin_role, now_iso))
+            announcement_id = c.lastrowid
+
+        dispatched = 0
+        if status == 'draft':
+            if db_type == 'postgres':
+                c.execute("""
+                    SELECT id, title, message, is_global, target_user_id
+                    FROM admin_announcements
+                    WHERE id = %s
+                """, (announcement_id,))
+            else:
+                c.execute("""
+                    SELECT id, title, message, is_global, target_user_id
+                    FROM admin_announcements
+                    WHERE id = ?
+                """, (announcement_id,))
+            ann_row = c.fetchone()
+            dispatched = _dispatch_announcement_row(c, db_type, ann_row)
+
+        log_action(
+            "CREATE_ANNOUNCEMENT",
+            f"Created announcement #{announcement_id}",
+            status="success",
+            extras={"is_global": bool(is_global), "target_user_id": target_user_id, "scheduled_for": scheduled_for, "dispatched": dispatched}
+        )
+
+        conn.commit()
+        conn.close()
+        return jsonify({"success": True, "id": announcement_id, "status": ("sent" if status == 'draft' else status), "dispatched": dispatched})
+    except Exception as e:
+        print(f"[ERROR] Create announcement: {e}")
+        if conn:
+            try:
+                conn.rollback()
+                conn.close()
+            except:
+                pass
+        return jsonify({"error": str(e)}), 500
+
+@admin_bp.route('/api/announcements/<int:announcement_id>/send', methods=['POST'])
+@admin_required
+@require_permission('view_audit')
+def send_announcement_now(announcement_id):
+    conn = None
+    try:
+        conn, db_type = get_db()
+        c = conn.cursor()
+        _ensure_admin_feature_tables(conn, c, db_type)
+        if db_type == 'postgres':
+            c.execute("""
+                SELECT id, title, message, is_global, target_user_id
+                FROM admin_announcements
+                WHERE id = %s
+            """, (announcement_id,))
+        else:
+            c.execute("""
+                SELECT id, title, message, is_global, target_user_id
+                FROM admin_announcements
+                WHERE id = ?
+            """, (announcement_id,))
+        row = c.fetchone()
+        if not row:
+            conn.close()
+            return jsonify({"error": "Announcement not found"}), 404
+        dispatched = _dispatch_announcement_row(c, db_type, row)
+        log_action("SEND_ANNOUNCEMENT", f"Sent announcement #{announcement_id}", status="success", extras={"dispatched": dispatched})
+        conn.commit()
+        conn.close()
+        return jsonify({"success": True, "dispatched": dispatched})
+    except Exception as e:
+        print(f"[ERROR] Send announcement: {e}")
+        if conn:
+            try:
+                conn.rollback()
+                conn.close()
+            except:
+                pass
+        return jsonify({"error": str(e)}), 500
+
+@admin_bp.route('/api/messages/user', methods=['POST'])
+@admin_required
+@require_permission('view_audit')
+def admin_message_user():
+    data = request.get_json() or {}
+    title = str(data.get('title') or 'Message from Admin').strip()
+    message = str(data.get('message') or '').strip()
+    target_user_id = data.get('target_user_id')
+    if not message:
+        return jsonify({"error": "Message required"}), 400
+    if target_user_id in (None, ''):
+        return jsonify({"error": "target_user_id required"}), 400
+    try:
+        target_user_id = int(target_user_id)
+    except Exception:
+        return jsonify({"error": "target_user_id must be numeric"}), 400
+
+    conn = None
+    try:
+        conn, db_type = get_db()
+        c = conn.cursor()
+        _ensure_admin_feature_tables(conn, c, db_type)
+        now_iso = _iso_now()
+        if db_type == 'postgres':
+            c.execute("""
+                INSERT INTO user_notifications (user_id, title, message, notif_type, source, is_read, created_at, sent_at)
+                VALUES (%s, %s, %s, %s, %s, 0, %s, %s)
+            """, (target_user_id, title, message, 'direct_message', 'admin', now_iso, now_iso))
+        else:
+            c.execute("""
+                INSERT INTO user_notifications (user_id, title, message, notif_type, source, is_read, created_at, sent_at)
+                VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+            """, (target_user_id, title, message, 'direct_message', 'admin', now_iso, now_iso))
+        log_action("DIRECT_MESSAGE", f"Sent direct message to user {target_user_id}", target_user_id=target_user_id, status="success")
+        conn.commit()
+        conn.close()
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"[ERROR] Direct message: {e}")
+        if conn:
+            try:
+                conn.rollback()
+                conn.close()
+            except:
+                pass
+        return jsonify({"error": str(e)}), 500
+
+@admin_bp.route('/api/push/send', methods=['POST'])
+@admin_required
+@require_permission('view_audit')
+def send_push_notification():
+    data = request.get_json() or {}
+    title = str(data.get('title') or 'Notification').strip()
+    message = str(data.get('message') or '').strip()
+    if not message:
+        return jsonify({"error": "Message required"}), 400
+    conn = None
+    try:
+        conn, db_type = get_db()
+        c = conn.cursor()
+        _ensure_admin_feature_tables(conn, c, db_type)
+        now_iso = _iso_now()
+        c.execute("SELECT id FROM users")
+        users = c.fetchall()
+        sent = 0
+        for row in users:
+            uid = row.get('id') if hasattr(row, 'keys') else row[0]
+            if db_type == 'postgres':
+                c.execute("""
+                    INSERT INTO user_notifications (user_id, title, message, notif_type, source, is_read, created_at, sent_at)
+                    VALUES (%s, %s, %s, %s, %s, 0, %s, %s)
+                """, (uid, title, message, 'push', 'admin', now_iso, now_iso))
+            else:
+                c.execute("""
+                    INSERT INTO user_notifications (user_id, title, message, notif_type, source, is_read, created_at, sent_at)
+                    VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+                """, (uid, title, message, 'push', 'admin', now_iso, now_iso))
+            sent += 1
+        log_action("PUSH_BROADCAST", "Broadcast push notification", status="success", extras={"sent_count": sent})
+        conn.commit()
+        conn.close()
+        return jsonify({"success": True, "sent": sent})
+    except Exception as e:
+        print(f"[ERROR] Push broadcast: {e}")
+        if conn:
+            try:
+                conn.rollback()
+                conn.close()
+            except:
+                pass
+        return jsonify({"error": str(e)}), 500
+
+@admin_bp.route('/api/admin-chat', methods=['GET', 'POST'])
+@admin_required
+@require_permission('view_audit')
+def admin_chat():
+    conn = None
+    try:
+        conn, db_type = get_db()
+        c = conn.cursor()
+        _ensure_admin_feature_tables(conn, c, db_type)
+        if request.method == 'POST':
+            data = request.get_json() or {}
+            msg = str(data.get('message') or '').strip()
+            if not msg:
+                conn.close()
+                return jsonify({"error": "Message required"}), 400
+            admin = get_admin_session()
+            role = admin['role'] if admin else 'unknown'
+            now_iso = _iso_now()
+            if db_type == 'postgres':
+                c.execute("INSERT INTO admin_chat_messages (admin_role, message, created_at) VALUES (%s, %s, %s)", (role, msg, now_iso))
+            else:
+                c.execute("INSERT INTO admin_chat_messages (admin_role, message, created_at) VALUES (?, ?, ?)", (role, msg, now_iso))
+            conn.commit()
+            log_action("ADMIN_CHAT_MESSAGE", "Posted admin chat message", status="success")
+            conn.close()
+            return jsonify({"success": True})
+
+        c.execute("""
+            SELECT id, admin_role, message, created_at
+            FROM admin_chat_messages
+            ORDER BY created_at DESC
+            LIMIT 100
+        """)
+        rows = c.fetchall()
+        conn.close()
+        out = []
+        for row in reversed(rows):
+            if hasattr(row, 'keys'):
+                out.append({
+                    "id": row.get('id'),
+                    "admin_role": row.get('admin_role') or "unknown",
+                    "message": row.get('message') or "",
+                    "created_at": row.get('created_at')
+                })
+            else:
+                out.append({
+                    "id": row[0],
+                    "admin_role": row[1] or "unknown",
+                    "message": row[2] or "",
+                    "created_at": row[3]
+                })
+        return jsonify(out)
+    except Exception as e:
+        print(f"[ERROR] Admin chat: {e}")
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
+        return jsonify({"error": str(e)}), 500
 
 # System Settings API
 @admin_bp.route('/api/system/settings', methods=['GET'])
@@ -1514,7 +2314,8 @@ def get_system_settings():
             "auto_refresh_seconds": "30",
             "audit_retention_days": "90",
             "safety_mode": "balanced",
-            "show_user_persona": "1"
+            "show_user_persona": "1",
+            "maintenance_mode": "0"
         }
 
         placeholders = ",".join(["%s"] * len(defaults)) if db_type == 'postgres' else ",".join(["?"] * len(defaults))
@@ -1538,6 +2339,7 @@ def get_system_settings():
             "audit_retention_days": int(merged["audit_retention_days"]),
             "safety_mode": merged["safety_mode"],
             "show_user_persona": str(merged["show_user_persona"]).lower() in ("1", "true", "yes", "on"),
+            "maintenance_mode": str(merged["maintenance_mode"]).lower() in ("1", "true", "yes", "on"),
             "success": True
         })
     except Exception as e:
@@ -1548,6 +2350,7 @@ def get_system_settings():
             "audit_retention_days": 90,
             "safety_mode": "balanced",
             "show_user_persona": True,
+            "maintenance_mode": False,
             "success": True
         })
 
@@ -1683,6 +2486,26 @@ def update_system_settings():
                     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
                 """, (str(show_user_persona),))
             updates.append(f"show_user_persona={show_user_persona}")
+
+        if 'maintenance_mode' in data:
+            raw_maintenance = data['maintenance_mode']
+            if isinstance(raw_maintenance, str):
+                maintenance_mode = 1 if raw_maintenance.strip().lower() in ('1', 'true', 'yes', 'on') else 0
+            else:
+                maintenance_mode = 1 if bool(raw_maintenance) else 0
+            if db_type == 'postgres':
+                c.execute("""
+                    INSERT INTO system_settings (key, value, updated_at)
+                    VALUES ('maintenance_mode', %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
+                """, (str(maintenance_mode),))
+            else:
+                c.execute("""
+                    INSERT INTO system_settings (key, value, updated_at)
+                    VALUES ('maintenance_mode', ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+                """, (str(maintenance_mode),))
+            updates.append(f"maintenance_mode={maintenance_mode}")
 
         if updates:
             log_action(
