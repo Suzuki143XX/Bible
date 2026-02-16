@@ -55,6 +55,8 @@ if DATABASE_URL and DATABASE_URL.startswith('postgres://'):
     DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
 
 IS_POSTGRES = DATABASE_URL and ('postgresql' in DATABASE_URL or 'postgres' in DATABASE_URL)
+BOOK_TEXT_CACHE = {}
+BOOK_META_CACHE = {}
 
 def get_db():
     """Get database connection - PostgreSQL for Render, SQLite for local"""
@@ -1451,6 +1453,160 @@ def get_current():
         "session_id": generator.session_id,
         "interval": generator.interval
     })
+
+def _pick_book_text_url(formats):
+    if not isinstance(formats, dict):
+        return None
+    preferred = [
+        'text/plain; charset=utf-8',
+        'text/plain; charset=us-ascii',
+        'text/plain'
+    ]
+    for key in preferred:
+        val = formats.get(key)
+        if isinstance(val, str) and val.startswith('http'):
+            return val
+    for key, val in formats.items():
+        if isinstance(key, str) and key.startswith('text/plain') and isinstance(val, str) and val.startswith('http'):
+            return val
+    return None
+
+def _strip_gutenberg_boilerplate(text):
+    if not text:
+        return ''
+    cleaned = text
+    start_markers = [
+        '*** START OF THE PROJECT GUTENBERG EBOOK',
+        '*** START OF THIS PROJECT GUTENBERG EBOOK'
+    ]
+    end_markers = [
+        '*** END OF THE PROJECT GUTENBERG EBOOK',
+        '*** END OF THIS PROJECT GUTENBERG EBOOK'
+    ]
+    for marker in start_markers:
+        idx = cleaned.find(marker)
+        if idx != -1:
+            nl = cleaned.find('\n', idx)
+            if nl != -1:
+                cleaned = cleaned[nl + 1:]
+            break
+    for marker in end_markers:
+        idx = cleaned.find(marker)
+        if idx != -1:
+            cleaned = cleaned[:idx]
+            break
+    cleaned = re.sub(r'\r\n?', '\n', cleaned)
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
+    return cleaned
+
+@app.route('/api/books/search')
+def books_search():
+    if 'user_id' not in session:
+        return jsonify({"error": "Not logged in"}), 401
+
+    q = (request.args.get('q') or 'faith').strip()
+    if len(q) < 2:
+        q = 'faith'
+
+    try:
+        resp = requests.get('https://gutendex.com/books', params={'search': q}, timeout=15)
+        if not resp.ok:
+            return jsonify({"error": "book_search_failed"}), 502
+        payload = resp.json() or {}
+        results = payload.get('results') or []
+
+        q_terms = [t for t in re.split(r'\W+', q.lower()) if t]
+        books = []
+        for b in results[:20]:
+            title = (b.get('title') or '').strip()
+            authors = b.get('authors') or []
+            author_name = ', '.join([(a.get('name') or '').strip() for a in authors if a.get('name')]) or 'Unknown'
+            subjects = b.get('subjects') or []
+            formats = b.get('formats') or {}
+            text_url = _pick_book_text_url(formats)
+            if not text_url:
+                continue
+
+            haystack = f"{title} {' '.join(subjects)} {author_name}".lower()
+            score = 0
+            for term in q_terms:
+                if term and term in haystack:
+                    score += 2
+            score += int((b.get('download_count') or 0) / 1000)
+
+            entry = {
+                "id": b.get('id'),
+                "title": title,
+                "author": author_name,
+                "downloads": b.get('download_count') or 0,
+                "cover": (formats.get('image/jpeg') or formats.get('image/png') or ''),
+                "text_url": text_url,
+                "ai_score": score
+            }
+            BOOK_META_CACHE[str(entry["id"])] = entry
+            books.append(entry)
+
+        books.sort(key=lambda x: (x["ai_score"], x["downloads"]), reverse=True)
+        return jsonify({"query": q, "books": books[:12]})
+    except Exception as e:
+        logger.error(f"Book search error: {e}")
+        return jsonify({"error": "book_search_error"}), 500
+
+@app.route('/api/books/content/<int:book_id>')
+def books_content(book_id):
+    if 'user_id' not in session:
+        return jsonify({"error": "Not logged in"}), 401
+
+    key = str(book_id)
+    cached = BOOK_TEXT_CACHE.get(key)
+    if cached:
+        return jsonify(cached)
+
+    try:
+        meta = BOOK_META_CACHE.get(key)
+        if not meta:
+            meta_resp = requests.get(f'https://gutendex.com/books/{book_id}', timeout=15)
+            if not meta_resp.ok:
+                return jsonify({"error": "book_not_found"}), 404
+            b = meta_resp.json() or {}
+            formats = b.get('formats') or {}
+            meta = {
+                "id": book_id,
+                "title": (b.get('title') or '').strip() or f'Book {book_id}',
+                "author": ', '.join([(a.get('name') or '').strip() for a in (b.get('authors') or []) if a.get('name')]) or 'Unknown',
+                "cover": (formats.get('image/jpeg') or formats.get('image/png') or ''),
+                "text_url": _pick_book_text_url(formats)
+            }
+            BOOK_META_CACHE[key] = meta
+
+        text_url = meta.get('text_url')
+        if not text_url:
+            return jsonify({"error": "book_text_unavailable"}), 404
+
+        text_resp = requests.get(text_url, timeout=20)
+        if not text_resp.ok:
+            return jsonify({"error": "book_text_fetch_failed"}), 502
+
+        raw = text_resp.text or ''
+        cleaned = _strip_gutenberg_boilerplate(raw)
+        if len(cleaned) < 200:
+            return jsonify({"error": "book_text_too_short"}), 422
+
+        # Keep payload reasonable for client rendering.
+        cleaned = cleaned[:800000]
+
+        payload = {
+            "id": book_id,
+            "title": meta.get('title') or f'Book {book_id}',
+            "author": meta.get('author') or 'Unknown',
+            "cover": meta.get('cover') or '',
+            "text": cleaned
+        }
+        BOOK_TEXT_CACHE[key] = payload
+        return jsonify(payload)
+    except Exception as e:
+        logger.error(f"Book content error: {e}")
+        return jsonify({"error": "book_content_error"}), 500
 
 @app.route('/api/set_interval', methods=['POST'])
 def set_interval():
