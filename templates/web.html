@@ -640,6 +640,31 @@
             background: #ffffff;
         }
 
+        .about-dots {
+            position: absolute;
+            left: 50%;
+            bottom: 10px;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 7px;
+            z-index: 4;
+        }
+
+        .about-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            border: 0;
+            background: rgba(255,255,255,0.42);
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .about-dot.active {
+            background: #ffffff;
+            transform: scale(1.15);
+        }
+
         .about-paused-indicator {
             position: absolute;
             left: 50%;
@@ -2735,6 +2760,10 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="about-dots" id="aboutDots">
+                            <button class="about-dot active" onclick="setAboutSlide(0)" aria-label="Slide 1"></button>
+                            <button class="about-dot" onclick="setAboutSlide(1)" aria-label="Slide 2"></button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -3452,6 +3481,7 @@
 
         // Tab Switching
         function switchTab(tab, btn = null) {
+            const prevTab = currentTab;
             currentTab = tab;
             
             document.querySelectorAll('.tab-view').forEach(v => {
@@ -3481,6 +3511,7 @@
             }
             if (tab === 'profile') loadProfileStats();
             if (tab === 'recommendations') loadRecommendations();
+            if (prevTab === 'about' && tab !== 'about') pauseAboutPlayback();
             if (tab === 'about') setAboutSlide(aboutSlideIndex);
         }
 
@@ -4846,6 +4877,7 @@
             const total = getAboutVideos().length || 1;
             aboutIsSliding = true;
             aboutSlideIndex = ((index % total) + total) % total;
+            updateAboutDots();
             track.style.transform = `translateX(-${aboutSlideIndex * 100}%)`;
             if (aboutSyncTimer) clearTimeout(aboutSyncTimer);
             aboutSyncTimer = setTimeout(() => {
@@ -4864,6 +4896,11 @@
 
         function syncAboutVideoPlayback() {
             const videos = getAboutVideos();
+            if (currentTab !== 'about') {
+                videos.forEach(v => { if (!v.paused) v.pause(); });
+                updateAboutPausedOverlay();
+                return;
+            }
             videos.forEach((v, i) => {
                 if (i === aboutSlideIndex) {
                     if (v.readyState < 2) v.load();
@@ -4873,6 +4910,11 @@
                     if (!v.paused) v.pause();
                 }
             });
+            updateAboutPausedOverlay();
+        }
+
+        function pauseAboutPlayback() {
+            getAboutVideos().forEach(v => { if (!v.paused) v.pause(); });
             updateAboutPausedOverlay();
         }
 
@@ -4947,6 +4989,11 @@
             aboutVolume = n;
             getAboutVideos().forEach(v => { v.volume = aboutVolume; });
             localStorage.setItem('aboutVideoVolume', String(aboutVolume));
+        }
+
+        function updateAboutDots() {
+            const dots = Array.from(document.querySelectorAll('#aboutDots .about-dot'));
+            dots.forEach((dot, idx) => dot.classList.toggle('active', idx === aboutSlideIndex));
         }
 
         function setupAboutSliderGestures() {
