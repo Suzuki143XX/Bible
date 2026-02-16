@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1523,10 +1523,30 @@
             }
         }
 
+        function formatLocation(location, fallbackIp) {
+            const loc = (location && typeof location === 'object') ? location : {};
+            const ip = loc.ip || fallbackIp || '';
+            const area = [loc.city, loc.region, loc.country].filter(Boolean).join(', ');
+            const tz = loc.timezone ? ` (${loc.timezone})` : '';
+            if (!ip && !area) return '-';
+            return `${escapeHtml(area || 'Unknown')}${tz}${ip ? `<br><small style="color:#888">IP: ${escapeHtml(ip)}</small>` : ''}`;
+        }
+
+        function formatExtras(extras) {
+            if (!extras || typeof extras !== 'object' || !Object.keys(extras).length) return '-';
+            try {
+                return `<code style="font-size:11px;color:#9ca3af;white-space:pre-wrap;">${escapeHtml(JSON.stringify(extras))}</code>`;
+            } catch (_) {
+                return '-';
+            }
+        }
+
         function renderAuditTable(rows) {
-            let html = '<table><thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Details</th></tr></thead><tbody>';
+            let html = '<table><thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Status</th><th>Target</th><th>Location</th><th>Details</th><th>Extras</th></tr></thead><tbody>';
             rows.forEach(l => {
                 const time = l.timestamp ? new Date(l.timestamp).toLocaleString() : '-';
+                const statusText = String(l.status || 'unknown').toLowerCase();
+                const statusColor = statusText === 'success' ? '#48bb78' : (statusText === 'failed' ? '#f56565' : '#ed8936');
                 const target = l.target_name
                     ? `${escapeHtml(l.target_name)}${l.target_email ? `<br><small style=\"color:#888\">${escapeHtml(l.target_email)}</small>` : ''}${l.target_role ? `<br><small style=\"color:#888\">Role: ${escapeHtml(l.target_role)}</small>` : ''}`
                     : (l.target_user_id ? `User #${escapeHtml(String(l.target_user_id))}` : '-');
@@ -1535,8 +1555,11 @@
                     <td>${time}</td>
                     <td>${escapeHtml(l.admin_name || l.admin_id || 'system')}</td>
                     <td>${escapeHtml(l.action || 'UNKNOWN')}</td>
+                    <td><span class="status-badge" style="background:rgba(255,255,255,0.08);color:${statusColor};text-transform:uppercase;">${escapeHtml(statusText)}</span></td>
                     <td>${target}</td>
+                    <td>${formatLocation(l.location, l.ip_address)}</td>
                     <td>${detailsText}</td>
+                    <td>${formatExtras(l.extras)}</td>
                 </tr>`;
             });
             html += '</tbody></table>';
@@ -1651,7 +1674,10 @@
                 if (search) {
                     const haystack = [
                         l.admin_name, l.admin_id, l.action, l.target_name, l.target_email,
-                        l.details, l.reason, l.duration
+                        l.details, l.reason, l.duration, l.status,
+                        l.location && l.location.ip, l.location && l.location.city,
+                        l.location && l.location.region, l.location && l.location.country,
+                        l.extras ? JSON.stringify(l.extras) : ''
                     ].map(x => String(x || '').toLowerCase()).join(' ');
                     if (!haystack.includes(search)) return false;
                 }
@@ -1679,7 +1705,7 @@
                 headers = ['user_id', 'user_name', 'user_email', 'reason', 'banned_by', 'banned_at', 'expires_at'];
                 rows = allBans || [];
             } else if (type === 'audit') {
-                headers = ['id', 'timestamp', 'admin_id', 'admin_name', 'action', 'target_user_id', 'target_name', 'target_email', 'target_role', 'reason', 'duration', 'details'];
+                headers = ['id', 'timestamp', 'admin_id', 'admin_name', 'action', 'status', 'target_user_id', 'target_name', 'target_email', 'target_role', 'location_ip', 'location_country', 'location_region', 'location_city', 'reason', 'duration', 'details', 'extras'];
                 rows = allAuditLogs || [];
             }
 
@@ -1688,9 +1714,22 @@
                 return;
             }
 
+            const normalizedRows = rows.map(r => {
+                if (type !== 'audit') return r;
+                const loc = (r.location && typeof r.location === 'object') ? r.location : {};
+                return {
+                    ...r,
+                    location_ip: loc.ip || r.ip_address || '',
+                    location_country: loc.country || '',
+                    location_region: loc.region || '',
+                    location_city: loc.city || '',
+                    extras: r.extras ? JSON.stringify(r.extras) : ''
+                };
+            });
+
             const csv = [
                 headers.join(','),
-                ...rows.map(r => headers.map(h => `"${String(r[h] ?? '').replace(/"/g, '""')}"`).join(','))
+                ...normalizedRows.map(r => headers.map(h => `"${String(r[h] ?? '').replace(/"/g, '""')}"`).join(','))
             ].join('\n');
 
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -1945,11 +1984,17 @@
                     const time = log.timestamp ? new Date(log.timestamp).toLocaleString() : '-';
                     const adminName = escapeHtml(log.admin_name || log.admin_id || 'system');
                     const actionName = escapeHtml((log.action || 'UNKNOWN').replace(/_/g, ' '));
+                    const statusLine = `<div class="activity-details">Status: ${escapeHtml(String(log.status || 'unknown').toUpperCase())}</div>`;
+                    const locationText = formatLocation(log.location, log.ip_address);
+                    const locationLine = locationText !== '-' ? `<div class="activity-details">Location: ${locationText}</div>` : '';
                     const targetLine = log.target_name
                         ? `<div class="activity-details">Target: ${escapeHtml(log.target_name)}${log.target_email ? ` (${escapeHtml(log.target_email)})` : ''}${log.target_role ? ` [${escapeHtml(log.target_role)}]` : ''}</div>`
                         : '';
                     const reasonLine = log.reason ? `<div class="activity-details">Reason: ${escapeHtml(log.reason)}</div>` : '';
                     const durationLine = log.duration ? `<div class="activity-details">Duration: ${escapeHtml(log.duration)}</div>` : '';
+                    const extrasLine = (log.extras && Object.keys(log.extras).length)
+                        ? `<div class="activity-details">Extras: ${escapeHtml(JSON.stringify(log.extras))}</div>`
+                        : '';
 
                     html += `
                         <div class="activity-item">
@@ -1958,9 +2003,12 @@
                                 <div class="activity-text">
                                     <strong>${actionName}</strong> by ${adminName}
                                 </div>
+                                ${statusLine}
                                 ${targetLine}
+                                ${locationLine}
                                 ${reasonLine}
                                 ${durationLine}
+                                ${extrasLine}
                                 <div class="activity-details">${escapeHtml(log.details || '')}</div>
                                 <div class="activity-time">${time}</div>
                             </div>
