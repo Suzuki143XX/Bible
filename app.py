@@ -1025,6 +1025,9 @@ class BibleGenerator:
 
 # Global generator instance
 generator = BibleGenerator()
+CURRENT_API_CACHE_TTL = max(0.5, float(os.environ.get('API_CURRENT_CACHE_TTL', '2.0')))
+_current_api_cache = {}
+_current_api_cache_lock = threading.Lock()
 
 # Bind the method to the class
 def generate_smart_recommendation(self, user_id):
@@ -1536,21 +1539,34 @@ def check_ban():
 def get_current():
     if 'user_id' not in session:
         return jsonify({"error": "Not logged in"}), 401
-    
-    is_banned, _, _ = check_ban_status(session['user_id'])
+
+    user_id = session['user_id']
+    now = time.time()
+    with _current_api_cache_lock:
+        cached = _current_api_cache.get(user_id)
+        if cached and (now - cached['timestamp']) < CURRENT_API_CACHE_TTL:
+            return jsonify(cached['payload'])
+
+    is_banned, _, _ = check_ban_status(user_id)
     if is_banned:
         return jsonify({"error": "banned", "message": "Account banned"}), 403
-    
+
     # Ensure thread is running
     generator.start_thread()
-    
-    return jsonify({
+
+    payload = {
         "verse": generator.get_current_verse(),
         "countdown": generator.get_time_left(),
         "total_verses": generator.total_verses,
         "session_id": generator.session_id,
         "interval": generator.interval
-    })
+    }
+    with _current_api_cache_lock:
+        _current_api_cache[user_id] = {
+            "timestamp": now,
+            "payload": payload
+        }
+    return jsonify(payload)
 
 def _pick_book_text_url(formats):
     if not isinstance(formats, dict):
