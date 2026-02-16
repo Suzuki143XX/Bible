@@ -251,6 +251,28 @@
             cursor: pointer;
             transition: transform 0.2s;
         }
+        .brand-copy {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 6px;
+            min-width: 0;
+        }
+        .mobile-donate-btn {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #ffffff;
+            text-decoration: none;
+            background: linear-gradient(135deg, #16a34a, #22c55e);
+            border: 1px solid rgba(255,255,255,0.18);
+            border-radius: 999px;
+            padding: 5px 10px;
+            white-space: nowrap;
+            box-shadow: 0 6px 14px rgba(34,197,94,0.3);
+        }
 
         .brand:active {
             transform: scale(0.95);
@@ -263,6 +285,9 @@
                 flex-direction: column;
                 text-align: center;
                 padding-top: 16px;
+            }
+            .brand-copy {
+                align-items: center;
             }
         }
 
@@ -394,9 +419,22 @@
         @media (max-width: 767px) {
             .header {
                 display: grid;
-                grid-template-columns: auto 1fr auto;
-                gap: 10px;
+                grid-template-columns: 1fr auto;
+                grid-template-areas:
+                    "brand actions"
+                    "credit credit";
+                gap: 10px 8px;
                 align-items: center;
+            }
+            .brand {
+                grid-area: brand;
+            }
+            .header-actions {
+                grid-area: actions;
+                justify-self: end;
+            }
+            .lovewell-credit {
+                grid-area: credit;
             }
             .brand {
                 min-width: 0;
@@ -405,18 +443,29 @@
                 font-size: 17px;
                 line-height: 1.05;
             }
+            .mobile-donate-btn {
+                display: inline-flex;
+            }
             .lovewell-credit {
-                min-width: 0;
-                max-width: 110px;
-                margin: 0;
+                width: 100%;
+                max-width: none;
+                margin: 4px 0 0;
+                padding-top: 8px;
+                border-top: 1px solid rgba(255,255,255,0.08);
+                flex-direction: row;
+                justify-content: center;
+                gap: 10px;
             }
             .lovewell-logo {
-                width: 60px;
-                margin-bottom: 2px;
+                width: 58px;
+                margin-bottom: 0;
+                flex-shrink: 0;
             }
             .lovewell-credit-text {
-                font-size: 9px;
-                line-height: 1.18;
+                font-size: 11px;
+                line-height: 1.25;
+                max-width: 220px;
+                text-align: left;
             }
             .header-actions {
                 gap: 8px;
@@ -576,6 +625,7 @@
         body.tab-comments .ambient-bg { filter: hue-rotate(78deg) saturate(1.1); }
         body.tab-profile .ambient-bg { filter: hue-rotate(110deg) saturate(1.1); }
         body.tab-about .ambient-bg { filter: hue-rotate(145deg) saturate(1.16); }
+        body.tab-donation .ambient-bg { filter: hue-rotate(168deg) saturate(1.2); }
         .ambient-bg { transition: filter 280ms ease; }
 
         @keyframes tabEnter {
@@ -1741,9 +1791,16 @@
             backdrop-filter: blur(20px) saturate(180%);
             border-top: 1px solid var(--glass-border);
             display: flex;
-            justify-content: space-around;
+            justify-content: flex-start;
+            overflow-x: auto;
+            overflow-y: hidden;
+            white-space: nowrap;
+            scrollbar-width: none;
             padding: 10px 8px calc(10px + var(--safe-bottom));
             z-index: 100;
+        }
+        .tab-bar::-webkit-scrollbar {
+            display: none;
         }
 
         @media (min-width: 1024px) {
@@ -1753,7 +1810,8 @@
         }
 
         .tab-btn {
-            flex: 1;
+            flex: 0 0 auto;
+            min-width: 66px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -2615,7 +2673,13 @@
                     <span class="admin-badge" id="adminBadge">ADMIN</span>
                     <span class="role-badge" id="roleBadge"></span>
                 </div>
-                <div class="brand-text">Bible AI</div>
+                <div class="brand-copy">
+                    <div class="brand-text">Bible AI</div>
+                    <a class="mobile-donate-btn" href="https://buy.stripe.com/7sY00j7sh4Do6Plaap4ko0b" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">
+                        <span>&#128176;</span>
+                        <span>Donate</span>
+                    </a>
+                </div>
             </div>
             
             <nav class="desktop-nav">
@@ -2642,6 +2706,10 @@
                 <button class="nav-item" onclick="switchTab('about')" data-tab="about">
                     <span class="nav-icon">&#127909;</span>
                     <span>About Us</span>
+                </button>
+                <button class="nav-item" onclick="switchTab('donation')" data-tab="donation">
+                    <span class="nav-icon">&#128176;</span>
+                    <span>Donation</span>
                 </button>
             </nav>
 
@@ -3118,6 +3186,26 @@
                     </div>
                 </div>
             </div>
+
+            <!-- DONATION TAB -->
+            <div id="donation" class="tab-view">
+                <div class="glass-card" style="padding: 24px; margin-bottom: 16px;">
+                    <div style="font-size: 22px; font-weight: 800; margin-bottom: 8px;">Support The Mission</div>
+                    <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;">
+                        Help keep Bible AI growing with better features, faster servers, and more community tools.
+                    </div>
+                    <a href="https://buy.stripe.com/7sY00j7sh4Do6Plaap4ko0b" target="_blank" rel="noopener noreferrer"
+                       style="display:inline-flex; align-items:center; justify-content:center; gap:8px; background: linear-gradient(135deg, #16a34a, #22c55e); color:white; text-decoration:none; padding:12px 18px; border-radius:12px; font-weight:700;">
+                        <span>&#128176;</span>
+                        <span>Donate Securely</span>
+                    </a>
+                </div>
+                <div class="glass-card" style="padding: 18px;">
+                    <div style="font-size: 14px; color: var(--text-secondary);">
+                        Every donation helps maintain uptime, moderation tools, and new features for the community.
+                    </div>
+                </div>
+            </div>
         </main>
 
         <!-- Mobile Tab Bar - No Images -->
@@ -3501,6 +3589,9 @@
         }
         let autoRecInterval = null;
         let verseCheckInterval = null;
+        let presencePingInterval = null;
+        let notificationPollInterval = null;
+        let latestNotificationId = null;
         let isAdmin = false;
         let favoritesCollection = null;
         let currentCommentsView = 'verse';
@@ -3554,6 +3645,12 @@
             initAboutVolumeControl();
             setAboutSlide(aboutSlideIndex);
             setupGlobalShortcuts();
+            pingPresence();
+            if (presencePingInterval) clearInterval(presencePingInterval);
+            presencePingInterval = setInterval(pingPresence, 45000);
+            pollNotifications();
+            if (notificationPollInterval) clearInterval(notificationPollInterval);
+            notificationPollInterval = setInterval(pollNotifications, 30000);
             const verseContainer = document.querySelector('.verse-container');
             if (verseContainer) {
                 verseContainer.addEventListener('dblclick', (e) => {
@@ -3884,6 +3981,36 @@
                 setAboutSlide(aboutSlideIndex);
                 startAboutProgressTicker();
             }
+        }
+
+        async function pingPresence() {
+            try {
+                await fetch('/api/presence/ping', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: window.location.pathname + '#' + currentTab })
+                });
+            } catch (_) {}
+        }
+
+        async function pollNotifications() {
+            try {
+                const res = await fetch('/api/notifications');
+                if (!res.ok) return;
+                const rows = await res.json();
+                if (!Array.isArray(rows) || !rows.length) return;
+                const unread = rows.filter(n => !n.is_read);
+                const newest = unread[0] || rows[0];
+                if (!newest) return;
+                if (latestNotificationId === null) {
+                    latestNotificationId = newest.id;
+                    return;
+                }
+                if (newest.id !== latestNotificationId && unread.length && settings.notifications) {
+                    showToast(`${newest.title || 'Notification'}: ${newest.message || ''}`);
+                    latestNotificationId = newest.id;
+                }
+            } catch (_) {}
         }
 
         // Verse Handling
@@ -5549,7 +5676,7 @@
         }
 
         function updateTabThemeClass(tab) {
-            const classes = ['tab-discover', 'tab-recommendations', 'tab-library', 'tab-comments', 'tab-profile', 'tab-about'];
+            const classes = ['tab-discover', 'tab-recommendations', 'tab-library', 'tab-comments', 'tab-profile', 'tab-about', 'tab-donation'];
             classes.forEach(c => document.body.classList.remove(c));
             document.body.classList.add(`tab-${tab}`);
         }
