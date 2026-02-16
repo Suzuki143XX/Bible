@@ -178,6 +178,18 @@ def init_db():
                     is_deleted INTEGER DEFAULT 0
                 )
             ''')
+
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS daily_actions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    action TEXT NOT NULL,
+                    verse_id INTEGER,
+                    event_date TEXT NOT NULL,
+                    timestamp TEXT,
+                    UNIQUE(user_id, action, verse_id, event_date)
+                )
+            ''')
             
             c.execute('''
                 CREATE TABLE IF NOT EXISTS audit_logs (
@@ -239,6 +251,11 @@ def init_db():
                          (id INTEGER PRIMARY KEY AUTOINCREMENT, parent_type TEXT NOT NULL, parent_id INTEGER NOT NULL,
                           user_id INTEGER NOT NULL, text TEXT NOT NULL, timestamp TEXT, google_name TEXT,
                           google_picture TEXT, is_deleted INTEGER DEFAULT 0)''')
+
+            c.execute('''CREATE TABLE IF NOT EXISTS daily_actions
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, action TEXT NOT NULL,
+                          verse_id INTEGER, event_date TEXT NOT NULL, timestamp TEXT,
+                          UNIQUE(user_id, action, verse_id, event_date))''')
             
             c.execute('''CREATE TABLE IF NOT EXISTS audit_logs 
                          (id INTEGER PRIMARY KEY AUTOINCREMENT, admin_id TEXT,
@@ -336,6 +353,22 @@ def migrate_db():
                 logger.info("Created comment_replies table")
             except Exception as e:
                 logger.warning(f"comment_replies table may already exist: {e}")
+
+            try:
+                c.execute("""
+                    CREATE TABLE IF NOT EXISTS daily_actions (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL,
+                        action TEXT NOT NULL,
+                        verse_id INTEGER,
+                        event_date TEXT NOT NULL,
+                        timestamp TEXT,
+                        UNIQUE(user_id, action, verse_id, event_date)
+                    )
+                """)
+                logger.info("Created daily_actions table")
+            except Exception as e:
+                logger.warning(f"daily_actions table may already exist: {e}")
                 
         else:
             # SQLite migrations
@@ -418,6 +451,22 @@ def migrate_db():
                 logger.info("Created comment_replies table")
             except Exception as e:
                 logger.warning(f"comment_replies table may already exist: {e}")
+
+            try:
+                c.execute("""
+                    CREATE TABLE IF NOT EXISTS daily_actions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        action TEXT NOT NULL,
+                        verse_id INTEGER,
+                        event_date TEXT NOT NULL,
+                        timestamp TEXT,
+                        UNIQUE(user_id, action, verse_id, event_date)
+                    )
+                """)
+                logger.info("Created daily_actions table")
+            except Exception as e:
+                logger.warning(f"daily_actions table may already exist: {e}")
         
         conn.commit()
         logger.info("Database migrations completed")
@@ -430,6 +479,31 @@ def migrate_db():
 
 init_db()
 migrate_db()
+
+def record_daily_action(user_id, action, verse_id=None):
+    """Persist unique per-day user actions used by Daily Challenge."""
+    conn, db_type = get_db()
+    c = get_cursor(conn, db_type)
+    today = datetime.now().date().isoformat()
+    now = datetime.now().isoformat()
+
+    try:
+        if db_type == 'postgres':
+            c.execute("""
+                INSERT INTO daily_actions (user_id, action, verse_id, event_date, timestamp)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (user_id, action, verse_id, event_date) DO NOTHING
+            """, (user_id, action, verse_id, today, now))
+        else:
+            c.execute("""
+                INSERT OR IGNORE INTO daily_actions (user_id, action, verse_id, event_date, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+            """, (user_id, action, verse_id, today, now))
+        conn.commit()
+    except Exception as e:
+        logger.warning(f"Daily action record failed: {e}")
+    finally:
+        conn.close()
 
 def log_action(admin_id, action, target_user_id=None, details=None):
     """Log admin actions for audit trail"""
@@ -1643,6 +1717,77 @@ def get_stats():
     finally:
         conn.close()
 
+@app.route('/api/daily_challenge')
+def get_daily_challenge():
+    if 'user_id' not in session:
+        return jsonify({"error": "Not logged in"}), 401
+
+    is_banned, _, _ = check_ban_status(session['user_id'])
+    if is_banned:
+        return jsonify({"error": "banned"}), 403
+
+    conn, db_type = get_db()
+    c = get_cursor(conn, db_type)
+    today = datetime.now().date().isoformat()
+    goal = 2
+
+    try:
+        if db_type == 'postgres':
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS daily_actions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    action TEXT NOT NULL,
+                    verse_id INTEGER,
+                    event_date TEXT NOT NULL,
+                    timestamp TEXT,
+                    UNIQUE(user_id, action, verse_id, event_date)
+                )
+            """)
+            c.execute("""
+                SELECT COUNT(*) AS count
+                FROM daily_actions
+                WHERE user_id = %s AND action = %s AND event_date = %s
+            """, (session['user_id'], 'save', today))
+            row = c.fetchone()
+            progress = int(row['count'] if row and isinstance(row, dict) else (row[0] if row else 0))
+        else:
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS daily_actions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    action TEXT NOT NULL,
+                    verse_id INTEGER,
+                    event_date TEXT NOT NULL,
+                    timestamp TEXT,
+                    UNIQUE(user_id, action, verse_id, event_date)
+                )
+            """)
+            c.execute("""
+                SELECT COUNT(*)
+                FROM daily_actions
+                WHERE user_id = ? AND action = ? AND event_date = ?
+            """, (session['user_id'], 'save', today))
+            row = c.fetchone()
+            progress = int(row[0] if row else 0)
+
+        conn.commit()
+        progress = min(progress, goal)
+        return jsonify({
+            "id": "save2",
+            "text": "Save 2 verses to your library",
+            "goal": goal,
+            "type": "save",
+            "date": today,
+            "progress": progress,
+            "completed": progress >= goal
+        })
+    except Exception as e:
+        logger.error(f"Daily challenge error: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
 @app.route('/api/debug/comments')
 def debug_comments():
     """Debug endpoint to check comments data"""
@@ -1759,6 +1904,8 @@ def save_verse():
     c = get_cursor(conn, db_type)
     
     try:
+        now = datetime.now().isoformat()
+        today = datetime.now().date().isoformat()
         if db_type == 'postgres':
             c.execute("SELECT id FROM saves WHERE user_id = %s AND verse_id = %s", (session['user_id'], verse_id))
             if c.fetchone():
@@ -1766,7 +1913,12 @@ def save_verse():
                 saved = False
             else:
                 c.execute("INSERT INTO saves (user_id, verse_id, timestamp) VALUES (%s, %s, %s)",
-                          (session['user_id'], verse_id, datetime.now().isoformat()))
+                          (session['user_id'], verse_id, now))
+                c.execute("""
+                    INSERT INTO daily_actions (user_id, action, verse_id, event_date, timestamp)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (user_id, action, verse_id, event_date) DO NOTHING
+                """, (session['user_id'], 'save', verse_id, today, now))
                 saved = True
         else:
             c.execute("SELECT id FROM saves WHERE user_id = ? AND verse_id = ?", (session['user_id'], verse_id))
@@ -1775,7 +1927,11 @@ def save_verse():
                 saved = False
             else:
                 c.execute("INSERT INTO saves (user_id, verse_id, timestamp) VALUES (?, ?, ?)",
-                          (session['user_id'], verse_id, datetime.now().isoformat()))
+                          (session['user_id'], verse_id, now))
+                c.execute("""
+                    INSERT OR IGNORE INTO daily_actions (user_id, action, verse_id, event_date, timestamp)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (session['user_id'], 'save', verse_id, today, now))
                 saved = True
         
         conn.commit()
