@@ -2249,6 +2249,16 @@
             margin-bottom: 8px;
             min-height: 16px;
         }
+        .book-page-title {
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--primary);
+            margin-bottom: 6px;
+            min-height: 16px;
+            opacity: 0.95;
+        }
 
         .book-page {
             min-height: 190px;
@@ -2758,6 +2768,7 @@
                         <option value="">Search to select a book...</option>
                     </select>
                     <div class="book-meta" id="bookMeta">Use AI-ranked search to load a full public-domain book.</div>
+                    <div class="book-page-title" id="bookPageTitle">Chapter</div>
                     <div class="book-page" id="bookPageText">Select a book to start reading.</div>
                     <div class="book-controls">
                         <button class="book-btn" onclick="prevBookPage()">◀ Prev</button>
@@ -5110,7 +5121,38 @@
         function paginateBookText(text) {
             const src = String(text || '').trim();
             if (!src) return ['No content available.'];
-            const paragraphs = src.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+
+            const normalized = src.replace(/\r\n?/g, '\n');
+
+            // Prefer chapter-first pagination so each chapter is its own page.
+            // Examples matched:
+            // "CHAPTER 1", "CHAPTER I", "Chapter 12", "BOOK I", "Book 2"
+            const chapterHeadingRe = /^(?:\s*(?:CHAPTER|Chapter)\s+(?:\d+|[IVXLCDM]+)\b.*|\s*(?:BOOK|Book)\s+(?:\d+|[IVXLCDM]+)\b.*)$/gm;
+            const chapterMatches = [...normalized.matchAll(chapterHeadingRe)];
+
+            if (chapterMatches.length >= 2) {
+                const pages = [];
+                const firstStart = chapterMatches[0].index || 0;
+                const preface = normalized.slice(0, firstStart).trim();
+
+                for (let i = 0; i < chapterMatches.length; i++) {
+                    const start = chapterMatches[i].index || 0;
+                    const end = i + 1 < chapterMatches.length ? (chapterMatches[i + 1].index || normalized.length) : normalized.length;
+                    let chapterText = normalized.slice(start, end).trim();
+                    if (!chapterText) continue;
+
+                    // Keep intro text attached to chapter 1 so chapter numbering aligns with pages.
+                    if (i === 0 && preface) {
+                        chapterText = `${preface}\n\n${chapterText}`;
+                    }
+                    pages.push(chapterText);
+                }
+
+                if (pages.length) return pages;
+            }
+
+            // Fallback: paragraph-based pagination when chapter headings aren't available.
+            const paragraphs = normalized.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
             const pages = [];
             const maxChars = 1500;
             let current = '';
@@ -5124,12 +5166,13 @@
                 }
             }
             if (current) pages.push(current);
-            return pages.length ? pages : [src.slice(0, maxChars)];
+            return pages.length ? pages : [normalized.slice(0, maxChars)];
         }
 
         function renderBookPage(withFlip = false) {
             const pageEl = document.getElementById('bookPageText');
             const pageInfo = document.getElementById('bookPageIndicator');
+            const titleEl = document.getElementById('bookPageTitle');
             if (!pageEl || !pageInfo) return;
 
             const total = bookState.pages.length;
@@ -5137,12 +5180,27 @@
             const text = total ? (bookState.pages[idx] || '') : 'Select a book to start reading.';
             pageEl.textContent = text;
             pageInfo.textContent = `Page ${total ? idx + 1 : 0}/${total}`;
+            if (titleEl) {
+                titleEl.textContent = extractBookPageTitle(text, idx);
+            }
 
             if (withFlip) {
                 pageEl.classList.remove('flip');
                 void pageEl.offsetWidth;
                 pageEl.classList.add('flip');
             }
+        }
+
+        function extractBookPageTitle(pageText, pageIdx) {
+            const text = String(pageText || '').replace(/\r\n?/g, '\n').trim();
+            if (!text) return 'Chapter';
+            const lines = text.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 8);
+            for (const line of lines) {
+                if (/^(?:CHAPTER|Chapter)\s+(?:\d+|[IVXLCDM]+)\b/.test(line)) return line;
+                if (/^(?:BOOK|Book)\s+(?:\d+|[IVXLCDM]+)\b/.test(line)) return line;
+                if (/^\d+\.\s+[A-Za-z]/.test(line) && line.length <= 80) return `Chapter ${line}`;
+            }
+            return `Page ${pageIdx + 1}`;
         }
 
         function prevBookPage() {
