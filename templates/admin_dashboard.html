@@ -758,6 +758,96 @@
             font-size: 0.7rem;
             font-weight: 700;
         }
+        .mini-list {
+            display: grid;
+            gap: 8px;
+            max-height: 220px;
+            overflow-y: auto;
+        }
+        .mini-item {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 0.82rem;
+        }
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .chart-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px;
+        }
+        .chart-title {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+        }
+        .spark-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 6px;
+            height: 120px;
+        }
+        .spark-bar {
+            flex: 1;
+            background: linear-gradient(180deg, #667eea, #5a67d8);
+            border-radius: 4px 4px 0 0;
+            min-height: 4px;
+            position: relative;
+        }
+        .spark-bar-label {
+            position: absolute;
+            bottom: -18px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: #777;
+            white-space: nowrap;
+        }
+        .admin-form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .admin-input, .admin-textarea {
+            width: 100%;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 0.86rem;
+        }
+        .admin-textarea {
+            min-height: 76px;
+            resize: vertical;
+        }
+        .admin-chat-box {
+            max-height: 220px;
+            overflow-y: auto;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px;
+            margin-top: 8px;
+        }
+        .admin-chat-item {
+            padding: 6px 0;
+            border-bottom: 1px dashed rgba(255,255,255,0.08);
+            font-size: 0.83rem;
+        }
+        .admin-chat-item:last-child {
+            border-bottom: none;
+        }
     </style>
 </head>
 <body>
@@ -842,6 +932,21 @@
                     <div class="stat-label">Your Role</div>
                     <div class="stat-value" style="font-size:1rem;text-transform:uppercase;margin-top:10px;" id="statRole">-</div>
                 </div>
+                <div class="stat-card">
+                    <div class="stat-icon">&#128994;</div>
+                    <div class="stat-label">Active Users Now</div>
+                    <div class="stat-value" id="statActiveNow">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">&#128200;</div>
+                    <div class="stat-label">Conversion Rate</div>
+                    <div class="stat-value" id="statConversion">0%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">&#128181;</div>
+                    <div class="stat-label">Revenue</div>
+                    <div class="stat-value" id="statRevenue">$0.00</div>
+                </div>
             </div>
 
             <!-- Quick Actions -->
@@ -875,6 +980,88 @@
                 </div>
                 <div class="activity-list" id="recentActivity">
                     <div class="loading"><div class="spinner"></div>Loading...</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">&#128202; Growth & Retention</div>
+                <div class="chart-grid">
+                    <div class="chart-card">
+                        <div class="chart-title">Daily Active Users</div>
+                        <div class="spark-bars" id="dauBars"></div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">User Growth</div>
+                        <div class="spark-bars" id="growthBars"></div>
+                    </div>
+                </div>
+                <div class="admin-form-grid" style="margin-top:16px;">
+                    <div class="mini-item"><strong>Retention D1:</strong> <span id="retentionD1">0%</span></div>
+                    <div class="mini-item"><strong>Retention D7:</strong> <span id="retentionD7">0%</span></div>
+                    <div class="mini-item"><strong>Retention D30:</strong> <span id="retentionD30">0%</span></div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">&#128226; Admin Broadcast Tools</div>
+                <div class="admin-form-grid">
+                    <div>
+                        <div style="font-size:0.8rem;color:#999;margin-bottom:6px;">Global Announcement</div>
+                        <input id="announceTitle" class="admin-input" placeholder="Title (optional)">
+                        <textarea id="announceMessage" class="admin-textarea" placeholder="Announcement message"></textarea>
+                        <button class="btn btn-primary" onclick="sendGlobalAnnouncement()">Send Global</button>
+                    </div>
+                    <div>
+                        <div style="font-size:0.8rem;color:#999;margin-bottom:6px;">Direct Message To User</div>
+                        <input id="directUserId" class="admin-input" placeholder="Target User ID">
+                        <input id="directTitle" class="admin-input" placeholder="Title">
+                        <textarea id="directMessage" class="admin-textarea" placeholder="Message"></textarea>
+                        <button class="btn btn-warning" onclick="sendDirectMessage()">Send Direct</button>
+                    </div>
+                    <div>
+                        <div style="font-size:0.8rem;color:#999;margin-bottom:6px;">Schedule Announcement</div>
+                        <input id="scheduleTitle" class="admin-input" placeholder="Title">
+                        <textarea id="scheduleMessage" class="admin-textarea" placeholder="Scheduled message"></textarea>
+                        <input id="scheduleWhen" class="admin-input" type="datetime-local">
+                        <button class="btn btn-secondary" onclick="scheduleAnnouncement()">Schedule</button>
+                    </div>
+                    <div>
+                        <div style="font-size:0.8rem;color:#999;margin-bottom:6px;">Push Notifications + Maintenance</div>
+                        <input id="pushTitle" class="admin-input" placeholder="Push title">
+                        <textarea id="pushMessage" class="admin-textarea" placeholder="Push message"></textarea>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button class="btn btn-success" onclick="sendPushBroadcast()">Send Push</button>
+                            <button class="btn btn-danger" onclick="toggleMaintenanceMode()">Toggle Maintenance</button>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top:12px; font-size:0.82rem; color:#888;">Scheduled: <span id="scheduledCount">0</span> • Sent: <span id="sentCount">0</span></div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">&#128101; User Insights</div>
+                <div class="admin-form-grid">
+                    <div>
+                        <div style="font-size:0.8rem;color:#999;margin-bottom:6px;">Recent Signups</div>
+                        <div id="recentSignupList" class="mini-list"></div>
+                    </div>
+                    <div>
+                        <div style="font-size:0.8rem;color:#999;margin-bottom:6px;">Top Active Users</div>
+                        <div id="topActiveUsersList" class="mini-list"></div>
+                    </div>
+                    <div>
+                        <div style="font-size:0.8rem;color:#999;margin-bottom:6px;">Most Used Features</div>
+                        <div id="mostUsedFeaturesList" class="mini-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">&#128172; Admin Chat Room</div>
+                <div class="admin-chat-box" id="adminChatBox"><div class="empty-state">No admin messages yet</div></div>
+                <div style="display:flex; gap:8px; margin-top:10px;">
+                    <input id="adminChatInput" class="admin-input" placeholder="Message admins..." style="flex:1;">
+                    <button class="btn btn-primary" onclick="sendAdminChat()">Send</button>
                 </div>
             </div>
         </div>
@@ -1110,6 +1297,8 @@
         let allRestrictions = [];
         let allBans = [];
         let allAuditLogs = [];
+        let insightsData = null;
+        let adminChatPoll = null;
         let banUserId = null;
         let restrictUserId = null;
         let selectedDuration = 'permanent';
@@ -1143,11 +1332,14 @@
             showToast('Refreshing...');
             await Promise.all([
                 loadStats(),
+                loadInsights(),
                 loadUsers(),
                 loadRestrictions(),
                 loadBans(),
                 loadComments(),
-                loadRecentActivity()
+                loadRecentActivity(),
+                loadAnnouncements(),
+                loadAdminChat()
             ]);
             showToast('Data refreshed!');
         }
@@ -1171,6 +1363,215 @@
                 badge.className = 'role-badge role-' + data.role;
             } catch (err) {
                 console.error('Stats error:', err);
+            }
+        }
+
+        function moneyFromCents(cents) {
+            const n = Number(cents || 0) / 100;
+            return n.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+        }
+
+        function renderSparkBars(containerId, series, labelKey = 'date', valueKey = 'count') {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const rows = Array.isArray(series) ? series : [];
+            if (!rows.length) {
+                container.innerHTML = '<div class="empty-state">No data</div>';
+                return;
+            }
+            const maxVal = Math.max(...rows.map(r => Number(r[valueKey] || 0)), 1);
+            container.innerHTML = rows.map(r => {
+                const value = Number(r[valueKey] || 0);
+                const h = Math.max(6, Math.round((value / maxVal) * 100));
+                const labelRaw = String(r[labelKey] || '').slice(5);
+                return `<div class="spark-bar" style="height:${h}%;" title="${escapeHtml(String(r[labelKey] || ''))}: ${value}">
+                    <span class="spark-bar-label">${escapeHtml(labelRaw || '')}</span>
+                </div>`;
+            }).join('');
+        }
+
+        function renderMiniList(containerId, rows, mapper) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const list = Array.isArray(rows) ? rows : [];
+            if (!list.length) {
+                container.innerHTML = '<div class="empty-state">No data</div>';
+                return;
+            }
+            container.innerHTML = list.map(mapper).join('');
+        }
+
+        async function loadInsights() {
+            try {
+                const res = await fetch('/admin/api/insights');
+                const data = await res.json();
+                if (data.error) return;
+                insightsData = data;
+                document.getElementById('statActiveNow').textContent = data.active_users_now ?? 0;
+                document.getElementById('statConversion').textContent = `${Number(data.conversion_rate || 0).toFixed(2)}%`;
+                document.getElementById('statRevenue').textContent = moneyFromCents(data.revenue_cents || 0);
+                document.getElementById('retentionD1').textContent = `${Number(data.retention?.day_1 || 0).toFixed(2)}%`;
+                document.getElementById('retentionD7').textContent = `${Number(data.retention?.day_7 || 0).toFixed(2)}%`;
+                document.getElementById('retentionD30').textContent = `${Number(data.retention?.day_30 || 0).toFixed(2)}%`;
+                document.getElementById('scheduledCount').textContent = data.announcements_scheduled ?? 0;
+                document.getElementById('sentCount').textContent = data.announcements_sent ?? 0;
+
+                renderSparkBars('dauBars', data.daily_active_users || []);
+                renderSparkBars('growthBars', data.user_growth || []);
+                renderMiniList('recentSignupList', data.recent_signups || [], (u) => `
+                    <div class="mini-item"><strong>${escapeHtml(u.name || 'Unknown')}</strong><br><small style="color:#888">${escapeHtml(u.email || '')} • ${escapeHtml(u.role || 'user')}</small></div>
+                `);
+                renderMiniList('topActiveUsersList', data.top_active_users || [], (u) => `
+                    <div class="mini-item"><strong>${escapeHtml(u.name || 'Unknown')}</strong><br><small style="color:#888">${u.actions || 0} actions</small></div>
+                `);
+                renderMiniList('mostUsedFeaturesList', data.most_used_features || [], (f) => `
+                    <div class="mini-item"><strong>${escapeHtml(String(f.feature || 'unknown').replace(/_/g, ' '))}</strong><br><small style="color:#888">${f.count || 0} uses</small></div>
+                `);
+            } catch (err) {
+                console.error('Insights error:', err);
+            }
+        }
+
+        async function sendGlobalAnnouncement() {
+            const title = document.getElementById('announceTitle')?.value?.trim() || 'Announcement';
+            const message = document.getElementById('announceMessage')?.value?.trim() || '';
+            if (!message) return showToast('Announcement message required');
+            try {
+                const res = await fetch('/admin/api/announcements', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, message, is_global: true })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Failed');
+                document.getElementById('announceMessage').value = '';
+                showToast('Global announcement sent');
+                loadInsights();
+            } catch (err) {
+                showToast('Send failed: ' + err.message);
+            }
+        }
+
+        async function sendDirectMessage() {
+            const target_user_id = document.getElementById('directUserId')?.value?.trim();
+            const title = document.getElementById('directTitle')?.value?.trim() || 'Message from Admin';
+            const message = document.getElementById('directMessage')?.value?.trim() || '';
+            if (!target_user_id || !message) return showToast('User ID and message required');
+            try {
+                const res = await fetch('/admin/api/messages/user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target_user_id, title, message })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Failed');
+                document.getElementById('directMessage').value = '';
+                showToast('Direct message sent');
+            } catch (err) {
+                showToast('Message failed: ' + err.message);
+            }
+        }
+
+        async function scheduleAnnouncement() {
+            const title = document.getElementById('scheduleTitle')?.value?.trim() || 'Scheduled Announcement';
+            const message = document.getElementById('scheduleMessage')?.value?.trim() || '';
+            const when = document.getElementById('scheduleWhen')?.value;
+            if (!message || !when) return showToast('Message and schedule time required');
+            try {
+                const res = await fetch('/admin/api/announcements', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, message, is_global: true, scheduled_for: new Date(when).toISOString() })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Failed');
+                showToast('Announcement scheduled');
+                loadInsights();
+            } catch (err) {
+                showToast('Schedule failed: ' + err.message);
+            }
+        }
+
+        async function sendPushBroadcast() {
+            const title = document.getElementById('pushTitle')?.value?.trim() || 'Push Notification';
+            const message = document.getElementById('pushMessage')?.value?.trim() || '';
+            if (!message) return showToast('Push message required');
+            try {
+                const res = await fetch('/admin/api/push/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, message })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Failed');
+                showToast(`Push sent to ${data.sent || 0} users`);
+            } catch (err) {
+                showToast('Push failed: ' + err.message);
+            }
+        }
+
+        async function toggleMaintenanceMode() {
+            const current = !!(insightsData && insightsData.maintenance_mode);
+            const next = !current;
+            try {
+                const res = await fetch('/admin/api/system/settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ maintenance_mode: next })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Failed');
+                showToast(`Maintenance ${next ? 'enabled' : 'disabled'}`);
+                loadSettings();
+            } catch (err) {
+                showToast('Maintenance update failed: ' + err.message);
+            }
+        }
+
+        async function loadAnnouncements() {
+            try {
+                const res = await fetch('/admin/api/announcements');
+                const rows = await res.json();
+                if (!Array.isArray(rows)) return;
+                const scheduled = rows.filter(r => String(r.status || '').toLowerCase() === 'scheduled').length;
+                const sent = rows.filter(r => String(r.status || '').toLowerCase() === 'sent').length;
+                document.getElementById('scheduledCount').textContent = scheduled;
+                document.getElementById('sentCount').textContent = sent;
+            } catch (_) {}
+        }
+
+        async function loadAdminChat() {
+            const box = document.getElementById('adminChatBox');
+            try {
+                const res = await fetch('/admin/api/admin-chat');
+                const rows = await res.json();
+                if (!Array.isArray(rows) || !rows.length) {
+                    box.innerHTML = '<div class="empty-state">No admin messages yet</div>';
+                    return;
+                }
+                box.innerHTML = rows.map(r => `<div class="admin-chat-item"><strong>${escapeHtml(String(r.admin_role || '').toUpperCase())}</strong>: ${escapeHtml(r.message || '')}<br><small style="color:#888">${new Date(r.created_at).toLocaleString()}</small></div>`).join('');
+                box.scrollTop = box.scrollHeight;
+            } catch (err) {
+                box.innerHTML = '<div class="empty-state">Failed to load chat</div>';
+            }
+        }
+
+        async function sendAdminChat() {
+            const input = document.getElementById('adminChatInput');
+            const message = (input?.value || '').trim();
+            if (!message) return;
+            try {
+                const res = await fetch('/admin/api/admin-chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Failed');
+                input.value = '';
+                loadAdminChat();
+            } catch (err) {
+                showToast('Chat failed: ' + err.message);
             }
         }
 
@@ -1404,6 +1805,7 @@
                 const currentRetention = parseInt(systemData.audit_retention_days || 90, 10);
                 const currentSafety = String(systemData.safety_mode || 'balanced');
                 const showPersona = !!systemData.show_user_persona;
+                const maintenanceEnabled = !!systemData.maintenance_mode;
 
                 container.innerHTML = `
                     <div class="settings-meta"><strong>Site:</strong> ${data.site_name}</div>
@@ -1462,6 +1864,14 @@
                             </select>
                             <div class="setting-help">Show target persona details in audits.</div>
                         </div>
+                        <div class="setting-card">
+                            <h4>Maintenance Mode</h4>
+                            <select id="adminMaintenanceMode" class="filter-select">
+                                <option value="0" ${!maintenanceEnabled ? 'selected' : ''}>Disabled</option>
+                                <option value="1" ${maintenanceEnabled ? 'selected' : ''}>Enabled</option>
+                            </select>
+                            <div class="setting-help">Temporarily lock the main website for upgrades.</div>
+                        </div>
                     </div>
                     <button class="btn btn-primary" onclick="saveFeaturedSettings()">Save Featured Settings</button>
                     <h4 style="margin-bottom:15px;">&#128274; Role Codes:</h4>
@@ -1507,7 +1917,8 @@
                 auto_refresh_seconds: parseInt(document.getElementById('adminAutoRefreshSeconds')?.value || '30', 10),
                 audit_retention_days: parseInt(document.getElementById('adminAuditRetentionDays')?.value || '90', 10),
                 safety_mode: document.getElementById('adminSafetyMode')?.value || 'balanced',
-                show_user_persona: (document.getElementById('adminShowPersona')?.value || '1') === '1'
+                show_user_persona: (document.getElementById('adminShowPersona')?.value || '1') === '1',
+                maintenance_mode: (document.getElementById('adminMaintenanceMode')?.value || '0') === '1'
             };
             try {
                 const res = await fetch('/admin/api/system/settings', {
@@ -2025,6 +2436,12 @@
         loadPermissions().then(() => {
             loadAllData();
             loadRecentActivity();
+            if (adminChatPoll) clearInterval(adminChatPoll);
+            adminChatPoll = setInterval(() => {
+                loadInsights();
+                loadAnnouncements();
+                loadAdminChat();
+            }, 30000);
         });
     </script>
 </body>
