@@ -90,6 +90,37 @@ def get_cursor(conn, db_type):
     else:
         return conn.cursor()
 
+def read_system_setting(key, default=None):
+    conn = None
+    try:
+        conn, db_type = get_db()
+        c = get_cursor(conn, db_type)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        if db_type == 'postgres':
+            c.execute("SELECT value FROM system_settings WHERE key = %s", (key,))
+        else:
+            c.execute("SELECT value FROM system_settings WHERE key = ?", (key,))
+        row = c.fetchone()
+        conn.close()
+        if not row:
+            return default
+        if hasattr(row, 'keys'):
+            return row.get('value', default)
+        return row[0] if row[0] is not None else default
+    except Exception:
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
+        return default
+
 def init_db():
     """Initialize database tables"""
     conn, db_type = get_db()
@@ -1098,7 +1129,74 @@ BibleGenerator.generate_smart_recommendation = generate_smart_recommendation
 @app.before_request
 def check_user_banned():
     """Check if current user is banned before processing request"""
+    endpoint = request.endpoint or ''
+    path = request.path or ''
+    public_allow = {'logout', 'check_ban', 'static', 'login', 'google_login', 'callback', 'health', 'manifest', 'serve_audio', 'serve_video'}
+
+    if not path.startswith('/admin') and endpoint not in public_allow:
+        maintenance_raw = read_system_setting('maintenance_mode', '0')
+        maintenance_enabled = str(maintenance_raw).strip().lower() in ('1', 'true', 'yes', 'on')
+        if maintenance_enabled and not session.get('admin_role'):
+            if request.is_json or path.startswith('/api/'):
+                return jsonify({"error": "maintenance", "message": "Site is under maintenance"}), 503
+            return render_template_string("""
+            <!DOCTYPE html>
+            <html>
+            <head><title>Maintenance</title>
+            <style>
+                body { background: #0a0a0f; color: white; font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+                .box { text-align: center; padding: 40px; background: rgba(10,132,255,0.12); border: 1px solid rgba(10,132,255,0.45); border-radius: 20px; max-width: 520px; }
+                h1 { color: #6fa7ff; margin-bottom: 14px; }
+            </style></head>
+            <body>
+                <div class="box">
+                    <h1>Maintenance Mode</h1>
+                    <p>We are upgrading the experience right now. Please check back shortly.</p>
+                </div>
+            </body>
+            </html>
+            """), 503
+
     if 'user_id' in session:
+        # Track user presence for admin analytics.
+        try:
+            conn, db_type = get_db()
+            c = get_cursor(conn, db_type)
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS user_presence (
+                    user_id INTEGER PRIMARY KEY,
+                    last_seen TEXT,
+                    last_path TEXT,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            now_iso = datetime.now().isoformat()
+            if db_type == 'postgres':
+                c.execute("""
+                    INSERT INTO user_presence (user_id, last_seen, last_path, updated_at)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (user_id) DO UPDATE SET
+                        last_seen = EXCLUDED.last_seen,
+                        last_path = EXCLUDED.last_path,
+                        updated_at = EXCLUDED.updated_at
+                """, (session['user_id'], now_iso, path, now_iso))
+            else:
+                c.execute("""
+                    INSERT INTO user_presence (user_id, last_seen, last_path, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(user_id) DO UPDATE SET
+                        last_seen = excluded.last_seen,
+                        last_path = excluded.last_path,
+                        updated_at = excluded.updated_at
+                """, (session['user_id'], now_iso, path, now_iso))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+
+        if endpoint in public_allow:
+            return None
+
         if request.endpoint in ['logout', 'check_ban', 'static', 'login', 'google_login', 'callback', 'health']:
             return None
         
@@ -3094,6 +3192,191 @@ def get_saved_verses():
     finally:
         conn.close()
 
+@app.route('/api/presence/ping', methods=['POST'])
+def presence_ping():
+    if 'user_id' not in session:
+        return jsonify({"error": "Not logged in"}), 401
+    conn = None
+    try:
+        conn, db_type = get_db()
+        c = get_cursor(conn, db_type)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS user_presence (
+                user_id INTEGER PRIMARY KEY,
+                last_seen TEXT,
+                last_path TEXT,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        now_iso = datetime.now().isoformat()
+        path = request.json.get('path') if request.is_json else request.path
+        if db_type == 'postgres':
+            c.execute("""
+                INSERT INTO user_presence (user_id, last_seen, last_path, updated_at)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (user_id) DO UPDATE SET
+                    last_seen = EXCLUDED.last_seen,
+                    last_path = EXCLUDED.last_path,
+                    updated_at = EXCLUDED.updated_at
+            """, (session['user_id'], now_iso, path, now_iso))
+        else:
+            c.execute("""
+                INSERT INTO user_presence (user_id, last_seen, last_path, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    last_seen = excluded.last_seen,
+                    last_path = excluded.last_path,
+                    updated_at = excluded.updated_at
+            """, (session['user_id'], now_iso, path, now_iso))
+        conn.commit()
+        conn.close()
+        return jsonify({"success": True})
+    except Exception as e:
+        logger.error(f"Presence ping error: {e}")
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/notifications')
+def get_notifications():
+    if 'user_id' not in session:
+        return jsonify([]), 401
+    conn = None
+    try:
+        conn, db_type = get_db()
+        c = get_cursor(conn, db_type)
+        if db_type == 'postgres':
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS user_notifications (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER,
+                    title TEXT,
+                    message TEXT,
+                    notif_type TEXT DEFAULT 'announcement',
+                    source TEXT DEFAULT 'admin',
+                    is_read INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    sent_at TIMESTAMP
+                )
+            """)
+        else:
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS user_notifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    title TEXT,
+                    message TEXT,
+                    notif_type TEXT DEFAULT 'announcement',
+                    source TEXT DEFAULT 'admin',
+                    is_read INTEGER DEFAULT 0,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    sent_at TEXT
+                )
+            """)
+        if db_type == 'postgres':
+            c.execute("""
+                SELECT id, title, message, notif_type, source, is_read, created_at
+                FROM user_notifications
+                WHERE user_id = %s
+                ORDER BY created_at DESC
+                LIMIT 50
+            """, (session['user_id'],))
+        else:
+            c.execute("""
+                SELECT id, title, message, notif_type, source, is_read, created_at
+                FROM user_notifications
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+                LIMIT 50
+            """, (session['user_id'],))
+        rows = c.fetchall()
+        conn.close()
+        out = []
+        for row in rows:
+            if hasattr(row, 'keys'):
+                out.append({
+                    "id": row.get('id'),
+                    "title": row.get('title') or 'Notification',
+                    "message": row.get('message') or '',
+                    "type": row.get('notif_type') or 'announcement',
+                    "source": row.get('source') or 'admin',
+                    "is_read": bool(row.get('is_read') or 0),
+                    "created_at": row.get('created_at')
+                })
+            else:
+                out.append({
+                    "id": row[0],
+                    "title": row[1] or 'Notification',
+                    "message": row[2] or '',
+                    "type": row[3] or 'announcement',
+                    "source": row[4] or 'admin',
+                    "is_read": bool(row[5] or 0),
+                    "created_at": row[6]
+                })
+        return jsonify(out)
+    except Exception as e:
+        logger.error(f"Get notifications error: {e}")
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
+        return jsonify([]), 500
+
+@app.route('/api/notifications/read', methods=['POST'])
+def mark_notifications_read():
+    if 'user_id' not in session:
+        return jsonify({"error": "Not logged in"}), 401
+    conn = None
+    try:
+        conn, db_type = get_db()
+        c = get_cursor(conn, db_type)
+        if db_type == 'postgres':
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS user_notifications (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER,
+                    title TEXT,
+                    message TEXT,
+                    notif_type TEXT DEFAULT 'announcement',
+                    source TEXT DEFAULT 'admin',
+                    is_read INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    sent_at TIMESTAMP
+                )
+            """)
+        else:
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS user_notifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    title TEXT,
+                    message TEXT,
+                    notif_type TEXT DEFAULT 'announcement',
+                    source TEXT DEFAULT 'admin',
+                    is_read INTEGER DEFAULT 0,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    sent_at TEXT
+                )
+            """)
+        if db_type == 'postgres':
+            c.execute("UPDATE user_notifications SET is_read = 1 WHERE user_id = %s", (session['user_id'],))
+        else:
+            c.execute("UPDATE user_notifications SET is_read = 1 WHERE user_id = ?", (session['user_id'],))
+        conn.commit()
+        conn.close()
+        return jsonify({"success": True})
+    except Exception as e:
+        logger.error(f"Mark notifications read error: {e}")
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
