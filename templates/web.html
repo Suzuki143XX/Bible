@@ -502,6 +502,12 @@
 
         .tab-view.active {
             display: block;
+            animation: tabEnter calc(0.34s * var(--animation-speed)) cubic-bezier(0.2, 0.7, 0.2, 1);
+        }
+
+        @keyframes tabEnter {
+            0% { opacity: 0; transform: translateY(10px) scale(0.995); filter: blur(3px); }
+            100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
         }
 
         .about-hero {
@@ -752,6 +758,16 @@
             transform: scale(1.01);
         }
 
+        .verse-container.verse-reveal {
+            animation: verseReveal calc(0.7s * var(--animation-speed)) cubic-bezier(0.16, 0.84, 0.3, 1);
+        }
+
+        @keyframes verseReveal {
+            0% { opacity: 0.22; transform: translateY(14px) scale(0.985); filter: blur(6px); }
+            60% { opacity: 1; transform: translateY(0) scale(1.003); filter: blur(0); }
+            100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+        }
+
         .verse-text {
             font-size: 22px;
             line-height: 1.6;
@@ -852,8 +868,43 @@
             transform: scale(0.96);
         }
 
+        .action-btn.pop-success {
+            animation: actionPop calc(0.36s * var(--animation-speed)) ease;
+        }
+
+        @keyframes actionPop {
+            0% { transform: scale(1); }
+            45% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
         .action-icon {
             font-size: 22px;
+        }
+
+        .action-icon.spark {
+            animation: iconSpark calc(0.45s * var(--animation-speed)) ease;
+        }
+
+        @keyframes iconSpark {
+            0% { transform: scale(1) rotate(0deg); }
+            40% { transform: scale(1.22) rotate(-10deg); }
+            100% { transform: scale(1) rotate(0deg); }
+        }
+
+        .reaction-burst {
+            position: fixed;
+            z-index: 9999;
+            pointer-events: none;
+            font-size: 14px;
+            animation: burstFloat 650ms ease-out forwards;
+            filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));
+        }
+
+        @keyframes burstFloat {
+            0% { opacity: 0; transform: translateY(6px) scale(0.9); }
+            20% { opacity: 1; }
+            100% { opacity: 0; transform: translateY(-34px) translateX(var(--dx, 0px)) scale(1.25); }
         }
 
         /* Timer */
@@ -3538,6 +3589,7 @@
                     document.getElementById('timerText').textContent = formatCountdown(data.countdown);
                     
                     if (isNew) {
+                        animateVerseReveal();
                         // Speak the new verse if TTS is enabled
                         speakVerse(data.verse.text, data.verse.ref);
 
@@ -3605,6 +3657,7 @@
             });
             const data = await res.json();
             updateLikeUI(data.liked);
+            animateActionFeedback('likeIcon', data.liked ? '❤️' : '');
             if (settings.notifications) showToast(data.liked ? 'Added to likes' : 'Removed from likes');
             
             if (data.recommendation && settings.autoRec) {
@@ -3625,6 +3678,7 @@
             });
             const data = await res.json();
             updateSaveUI(data.saved);
+            animateActionFeedback('saveIcon', data.saved ? '🔖' : '');
             
             // Track daily challenge
             if (data.saved) trackDailyAction('save');
@@ -3773,6 +3827,8 @@
             });
             btn.innerHTML = '&#9829; Liked';
             btn.classList.add('liked');
+            btn.classList.add('pop-success');
+            setTimeout(() => btn.classList.remove('pop-success'), 420);
             trackDailyAction('like');
         }
 
@@ -3784,6 +3840,8 @@
             });
             btn.innerHTML = '&#128209; Saved';
             btn.classList.add('saved');
+            btn.classList.add('pop-success');
+            setTimeout(() => btn.classList.remove('pop-success'), 420);
             trackDailyAction('save');
         }
 
@@ -4109,9 +4167,9 @@
                     </div>
                     <div class="comment-text">${escapeHtml(c.text)}</div>
                     <div class="reaction-bar">
-                        <button class="reaction-btn" onclick="addReaction(${c.id}, '${type}', 'heart')">❤️ ${reactions['heart'] || 0}</button>
-                        <button class="reaction-btn" onclick="addReaction(${c.id}, '${type}', 'pray')">🙏 ${reactions['pray'] || 0}</button>
-                        <button class="reaction-btn" onclick="addReaction(${c.id}, '${type}', 'cross')">✝️ ${reactions['cross'] || 0}</button>
+                        <button class="reaction-btn" onclick="addReaction(${c.id}, '${type}', 'heart', this)">❤️ ${reactions['heart'] || 0}</button>
+                        <button class="reaction-btn" onclick="addReaction(${c.id}, '${type}', 'pray', this)">🙏 ${reactions['pray'] || 0}</button>
+                        <button class="reaction-btn" onclick="addReaction(${c.id}, '${type}', 'cross', this)">✝️ ${reactions['cross'] || 0}</button>
                         <button class="reply-btn" onclick="showReplyBox(${c.id}, '${type}')">Reply (${c.reply_count || replies.length || 0})</button>
                     </div>
                     <div class="comment-replies" id="replies-${type}-${c.id}">${renderReplies(replies)}</div>
@@ -4718,7 +4776,7 @@
                     <div class="comment-text">${escapeHtml(comment.text)}</div>
                     <div class="reaction-bar">
                         ${Object.entries(reactions).map(([emoji, count]) => `
-                            <button class="reaction-btn ${count > 0 ? 'active' : ''}" onclick="addReaction(${comment.id}, '${emoji}')">
+                            <button class="reaction-btn ${count > 0 ? 'active' : ''}" onclick="addReaction(${comment.id}, '${emoji}', undefined, this)">
                                 ${emoji} ${count > 0 ? count : ''}
                             </button>
                         `).join('')}
@@ -4733,7 +4791,48 @@
             `;
         }
 
-        async function addReaction(commentId, type, emoji) {
+        function animateVerseReveal() {
+            const el = document.querySelector('.verse-container');
+            if (!el) return;
+            el.classList.remove('verse-reveal');
+            void el.offsetWidth;
+            el.classList.add('verse-reveal');
+        }
+
+        function animateActionFeedback(iconId, burstEmoji = '') {
+            const icon = document.getElementById(iconId);
+            const btn = icon ? icon.closest('.action-btn') : null;
+            if (icon) {
+                icon.classList.remove('spark');
+                void icon.offsetWidth;
+                icon.classList.add('spark');
+                setTimeout(() => icon.classList.remove('spark'), 520);
+            }
+            if (btn) {
+                btn.classList.add('pop-success');
+                setTimeout(() => btn.classList.remove('pop-success'), 420);
+                if (burstEmoji) spawnReactionBurst(btn, burstEmoji, 7);
+            }
+        }
+
+        function spawnReactionBurst(targetEl, emoji = '✨', count = 6) {
+            if (!targetEl || document.body.classList.contains('no-animations')) return;
+            const rect = targetEl.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            for (let i = 0; i < count; i++) {
+                const chip = document.createElement('span');
+                chip.className = 'reaction-burst';
+                chip.textContent = emoji;
+                chip.style.left = `${cx + (Math.random() * 22 - 11)}px`;
+                chip.style.top = `${cy + (Math.random() * 8 - 4)}px`;
+                chip.style.setProperty('--dx', `${(Math.random() * 30 - 15).toFixed(1)}px`);
+                document.body.appendChild(chip);
+                setTimeout(() => chip.remove(), 700);
+            }
+        }
+
+        async function addReaction(commentId, type, emoji, btnEl = null) {
             try {
                 if (emoji === undefined) {
                     emoji = type;
@@ -4751,6 +4850,9 @@
                     showToast(data.error || 'Reaction failed');
                     return;
                 }
+                const burstMap = { heart: '❤️', pray: '🙏', cross: '✝️' };
+                const burstEmoji = burstMap[normalizedReaction] || '✨';
+                spawnReactionBurst(btnEl || document.body, burstEmoji, 5);
                 if (itemType === 'community') {
                     loadCommunityMessages();
                 } else {
