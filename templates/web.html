@@ -808,6 +808,40 @@
             opacity: 1;
         }
 
+        .about-info-grid {
+            margin-top: 14px;
+            display: grid;
+            gap: 10px;
+        }
+
+        .about-info-card {
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            background: rgba(255,255,255,0.04);
+            padding: 12px;
+        }
+
+        .about-info-title {
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+            color: var(--primary);
+            margin-bottom: 6px;
+        }
+
+        .about-info-text {
+            font-size: 13px;
+            line-height: 1.55;
+            color: var(--text-secondary);
+        }
+
+        .about-link-inline {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 700;
+        }
+
         @media (min-width: 1024px) {
             .tab-view {
                 display: none !important;
@@ -3020,7 +3054,7 @@
                 <div class="about-hero">
                     <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">About Us</div>
                     <div style="font-size: 14px; color: var(--text-secondary);">
-                        Watch our story and mission videos.
+                        Cross For All overview: mission, beliefs, leadership, and community impact.
                     </div>
                 </div>
 
@@ -3057,6 +3091,29 @@
                         <div class="about-dots" id="aboutDots">
                             <button class="about-dot active" onclick="setAboutSlide(0)" aria-label="Slide 1"></button>
                             <button class="about-dot" onclick="setAboutSlide(1)" aria-label="Slide 2"></button>
+                        </div>
+                    </div>
+
+                    <div class="about-info-grid">
+                        <div class="about-info-card">
+                            <div class="about-info-title">Mission</div>
+                            <div class="about-info-text">Cross For All describes its direction with three pillars: Cross Centered, Community Focused, and Church Sent.</div>
+                        </div>
+                        <div class="about-info-card">
+                            <div class="about-info-title">Vision & Beliefs</div>
+                            <div class="about-info-text">The ministry highlights a city where all can find hope in Jesus and emphasizes scripture-centered teaching, worship, prayer, and compassionate service.</div>
+                        </div>
+                        <div class="about-info-card">
+                            <div class="about-info-title">Leadership</div>
+                            <div class="about-info-text">Senior Pastor: Joshua Lee. Executive Pastor: Linda Lee. The site also notes support ministries including youth, outreach, and worship teams.</div>
+                        </div>
+                        <div class="about-info-card">
+                            <div class="about-info-title">Location & Times</div>
+                            <div class="about-info-text">Address listed: 1136 N. Tustin Ave, Anaheim, CA 92807. Sunday gatherings shown: 9 AM and 11 AM.</div>
+                        </div>
+                        <div class="about-info-card">
+                            <div class="about-info-title">Learn More</div>
+                            <div class="about-info-text">Official page: <a class="about-link-inline" href="https://www.crossforall.com/about" target="_blank" rel="noopener noreferrer">crossforall.com/about</a></div>
                         </div>
                     </div>
                 </div>
