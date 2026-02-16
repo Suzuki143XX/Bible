@@ -3602,11 +3602,12 @@
         let verseCheckInterval = null;
         let presencePingInterval = null;
         let notificationPollInterval = null;
-        const VERSE_POLL_INTERVAL_MS = 3000;
-        const STATUS_REFRESH_INTERVAL_MS = 10000;
+        const VERSE_POLL_INTERVAL_MS = 5000;
+        const STATUS_REFRESH_INTERVAL_MS = 15000;
         let verseFetchInFlight = false;
         let lastStatusRefreshAt = 0;
         let lastStatusVerseId = null;
+        let initDone = false;
         let latestNotificationId = null;
         let isAdmin = false;
         let favoritesCollection = null;
@@ -3636,12 +3637,29 @@
         };
 
         // Initialize
+        function startVersePolling() {
+            if (verseCheckInterval) return;
+            fetchVerse();
+            verseCheckInterval = setInterval(() => {
+                if (document.hidden) return;
+                fetchVerse();
+            }, VERSE_POLL_INTERVAL_MS);
+        }
+
+        function stopVersePolling() {
+            if (!verseCheckInterval) return;
+            clearInterval(verseCheckInterval);
+            verseCheckInterval = null;
+        }
+
         async function init() {
+            if (initDone) return;
+            initDone = true;
             loadSettings();
             initGlobalFontScaling();
             initPermanentTimer();
-            fetchVerse();
-            verseCheckInterval = setInterval(fetchVerse, VERSE_POLL_INTERVAL_MS);
+            stopVersePolling();
+            startVersePolling();
             checkAdminStatus();
             
             // Setup textarea auto-resize
@@ -3667,6 +3685,10 @@
             pollNotifications();
             if (notificationPollInterval) clearInterval(notificationPollInterval);
             notificationPollInterval = setInterval(pollNotifications, 30000);
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) stopVersePolling();
+                else startVersePolling();
+            });
             const verseContainer = document.querySelector('.verse-container');
             if (verseContainer) {
                 verseContainer.addEventListener('dblclick', (e) => {
