@@ -2366,12 +2366,12 @@
                 <!-- Daily Challenge -->
                 <div class="daily-challenge" id="dailyChallenge" style="display: none;">
                     <div class="challenge-title">🎯 Daily Challenge</div>
-                    <div class="challenge-text" id="challengeText">Like 3 verses today</div>
+                    <div class="challenge-text" id="challengeText">Save 2 verses to your library</div>
                     <div class="challenge-progress">
                         <div class="challenge-fill" id="challengeFill" style="width: 0%"></div>
                     </div>
                     <div style="text-align: right; font-size: 12px; margin-top: 6px; opacity: 0.8;">
-                        <span id="challengeProgress">0</span>/<span id="challengeGoal">3</span>
+                        <span id="challengeProgress">0</span>/<span id="challengeGoal">2</span>
                     </div>
                 </div>
 
@@ -4472,109 +4472,50 @@
 
         // === DISCOVER TAB FEATURES ===
         
-        // Daily Challenge System - Tracks daily actions (resets each day)
-        const DAILY_CHALLENGES = [
-            { id: 'like10', text: 'Like 10 verses today', goal: 10, type: 'like' },
-            { id: 'save5', text: 'Save 5 verses to your library', goal: 5, type: 'save' },
-            { id: 'share3', text: 'Share 3 verses with others', goal: 3, type: 'share' },
-            { id: 'comment3', text: 'Leave 3 comments on verses', goal: 3, type: 'comment' },
-            { id: 'view20', text: 'View 20 different verses', goal: 20, type: 'view' },
-            { id: 'streak2', text: 'Maintain a 2-day streak', goal: 2, type: 'streak' }
-        ];
-
-        function getDailyActions() {
-            const today = new Date().toDateString();
-            const saved = localStorage.getItem('dailyActions');
-            if (saved) {
-                try {
-                    const parsed = JSON.parse(saved);
-                    if (parsed && parsed.date === today) {
-                        parsed.viewedVerses = Array.isArray(parsed.viewedVerses) ? parsed.viewedVerses.map(v => String(v)) : [];
-                        return parsed;
-                    }
-                } catch (_) {}
-            }
-            return { date: today, like: 0, save: 0, share: 0, comment: 0, view: 0, streak: 0, viewedVerses: [] };
-        }
+        // Daily Challenge System (database-backed)
+        const DAILY_CHALLENGE_TOAST_KEY = 'dailyChallengeCompleteDate';
 
         function trackDailyAction(action, verseId) {
-            const actions = getDailyActions();
-            if (action === 'view' && verseId) {
-                const normalizedVerseId = String(verseId);
-                if (!actions.viewedVerses.includes(normalizedVerseId)) {
-                    actions.viewedVerses.push(normalizedVerseId);
-                    actions.view = actions.viewedVerses.length;
-                }
-            } else if (actions[action] !== undefined) {
-                actions[action]++;
+            // Keep signature for existing call sites; server tracks save actions.
+            if (action === 'save') {
+                updateChallengeProgress();
             }
-            localStorage.setItem('dailyActions', JSON.stringify(actions));
-            updateChallengeProgress();
         }
 
-        function initDailyChallenge() {
-            const today = new Date().toDateString();
-            const saved = localStorage.getItem('dailyChallenge');
-            let challenge;
-            
-            if (saved) {
-                try {
-                    const parsed = JSON.parse(saved);
-                    if (parsed && parsed.date === today) {
-                        challenge = parsed;
-                    }
-                } catch (_) {}
-            }
-            
-            if (!challenge) {
-                const random = DAILY_CHALLENGES[Math.floor(Math.random() * DAILY_CHALLENGES.length)];
-                challenge = { ...random, date: today, progress: 0, completed: false };
-                localStorage.setItem('dailyChallenge', JSON.stringify(challenge));
-            }
-            
+        async function initDailyChallenge() {
             const challengeEl = document.getElementById('dailyChallenge');
             if (!challengeEl) return;
             challengeEl.style.display = 'block';
-            document.getElementById('challengeText').textContent = challenge.text;
-            document.getElementById('challengeGoal').textContent = challenge.goal;
-            updateChallengeProgress();
+            await updateChallengeProgress();
         }
 
-        function updateChallengeProgress() {
-            const saved = localStorage.getItem('dailyChallenge');
-            if (!saved) return;
-            let challenge;
+        async function updateChallengeProgress() {
             try {
-                challenge = JSON.parse(saved);
+                const res = await fetch('/api/daily_challenge');
+                const data = await res.json();
+                if (!res.ok || data.error) return;
+
+                document.getElementById('challengeText').textContent = data.text || 'Save 2 verses to your library';
+                document.getElementById('challengeGoal').textContent = data.goal || 2;
+                const progress = Math.max(0, Number(data.progress || 0));
+                const goal = Math.max(1, Number(data.goal || 2));
+                const pct = Math.min(100, (progress / goal) * 100);
+
+                const fillEl = document.getElementById('challengeFill');
+                const progressEl = document.getElementById('challengeProgress');
+                if (fillEl) fillEl.style.width = pct + '%';
+                if (progressEl) progressEl.textContent = String(Math.min(progress, goal));
+
+                if (data.completed) {
+                    const today = String(data.date || new Date().toISOString().slice(0, 10));
+                    if (localStorage.getItem(DAILY_CHALLENGE_TOAST_KEY) !== today) {
+                        localStorage.setItem(DAILY_CHALLENGE_TOAST_KEY, today);
+                        showToast('🎯 Daily Challenge Complete! +100 XP');
+                        AudioSys.playSuccess();
+                    }
+                }
             } catch (_) {
-                localStorage.removeItem('dailyChallenge');
-                return;
-            }
-            if (!challenge || !challenge.type || !challenge.goal) return;
-            const actions = getDailyActions();
-            
-            let current = 0;
-            if (challenge.type === 'streak') {
-                const streak = JSON.parse(localStorage.getItem('verseStreak') || '{}');
-                current = streak.streak || 0;
-            } else {
-                current = actions[challenge.type] || 0;
-            }
-            
-            challenge.progress = Math.min(current, challenge.goal);
-            localStorage.setItem('dailyChallenge', JSON.stringify(challenge));
-            
-            const pct = (challenge.progress / challenge.goal) * 100;
-            const fillEl = document.getElementById('challengeFill');
-            const progressEl = document.getElementById('challengeProgress');
-            if (fillEl) fillEl.style.width = pct + '%';
-            if (progressEl) progressEl.textContent = challenge.progress;
-            
-            if (challenge.progress >= challenge.goal && !challenge.completed) {
-                challenge.completed = true;
-                localStorage.setItem('dailyChallenge', JSON.stringify(challenge));
-                showToast('🎯 Daily Challenge Complete! +100 XP');
-                AudioSys.playSuccess();
+                // Keep UI stable if endpoint temporarily fails.
             }
         }
 
